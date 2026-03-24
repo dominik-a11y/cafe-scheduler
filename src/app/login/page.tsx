@@ -11,10 +11,11 @@ function LoginForm() {
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('invite');
-  const isRegister = !!inviteToken;
+  const isRegister = mode === 'register' || !!inviteToken;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,12 +32,14 @@ function LoginForm() {
         });
         if (signUpError) throw signUpError;
 
-        // Accept invite
-        await fetch('/api/auth/accept-invite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: inviteToken }),
-        });
+        // Accept invite if token present
+        if (inviteToken) {
+          await fetch('/api/auth/accept-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: inviteToken }),
+          });
+        }
         router.push('/schedule');
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
@@ -106,6 +109,31 @@ function LoginForm() {
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isRegister ? <UserPlus className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
             {isRegister ? 'Utwórz konto' : 'Zaloguj się'}
           </button>
+          <div className="text-center text-sm text-gray-500">
+            {isRegister ? (
+              <>
+                Masz już konto?{' '}
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setError(''); }}
+                  className="text-amber-600 hover:text-amber-700 font-medium"
+                >
+                  Zaloguj się
+                </button>
+              </>
+            ) : (
+              <>
+                Nie masz konta?{' '}
+                <button
+                  type="button"
+                  onClick={() => { setMode('register'); setError(''); }}
+                  className="text-amber-600 hover:text-amber-700 font-medium"
+                >
+                  Zarejestruj się
+                </button>
+              </>
+            )}
+          </div>
         </form>
       </div>
     </div>
