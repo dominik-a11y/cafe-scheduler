@@ -1,147 +1,121 @@
 'use client';
 
-import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import Link from 'next/link';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Coffee } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { Coffee, LogIn, UserPlus, Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('invite');
+  const isRegister = !!inviteToken;
 
-  const supabase = createClient();
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    setError(null);
+    const supabase = createClient();
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      if (isRegister) {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: fullName } },
+        });
+        if (signUpError) throw signUpError;
 
-      if (signInError) throw signInError;
-
-      // If there's an invite token, accept it
-      if (inviteToken) {
-        const response = await fetch('/api/auth/accept-invite', {
+        // Accept invite
+        await fetch('/api/auth/accept-invite', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token: inviteToken }),
         });
-
-        if (!response.ok) {
-          console.error('Failed to accept invitation');
-        }
+        router.push('/schedule');
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+        router.push('/schedule');
       }
-
-      router.push('/schedule');
     } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (signUpError) throw signUpError;
-
-      setError('Check your email to confirm registration');
-    } catch (err: any) {
-      setError(err.message || 'Sign up failed');
+      setError(err.message || 'Wystąpił błąd');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <div className="flex justify-center mb-6">
-            <Coffee className="w-12 h-12 text-amber-600" />
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
+            <Coffee className="w-8 h-8 text-amber-700" />
           </div>
-          <h1 className="text-3xl font-light text-center mb-2">Café Scheduler</h1>
-          <p className="text-center text-gray-600 text-sm mb-8">
-            Zarządzaj zmianami pracowników
-          </p>
-
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
-              {error}
+          <h1 className="text-2xl font-bold text-gray-900">Grafik Kawiarni</h1>
+          <p className="text-gray-500 mt-1">{isRegister ? 'Utwórz swoje konto' : 'Zaloguj się do systemu'}</p>
+        </div>
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
+          {isRegister && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Imię i nazwisko</label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+                placeholder="Jan Kowalski"
+              />
             </div>
           )}
-
-          <form onSubmit={handleLogin} className="space-y-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Hasło
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-amber-600 text-white py-2 rounded-lg hover:bg-amber-700 transition disabled:opacity-50"
-            >
-              {loading ? 'Logowanie...' : 'Zaloguj się'}
-            </button>
-          </form>
-
-          <div className="relative mb-4">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">lub</span>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+              placeholder="email@example.com"
+            />
           </div>
-
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Hasło</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+              placeholder="••••••••"
+            />
+          </div>
+          {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl px-4 py-3">{error}</div>}
           <button
-            onClick={handleSignUp}
+            type="submit"
             disabled={loading}
-            className="w-full bg-gray-100 text-gray-900 py-2 rounded-lg hover:bg-gray-200 transition disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-4 rounded-xl transition disabled:opacity-50"
           >
-            {loading ? 'Rejestracja...' : 'Utwórz nowe konto'}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isRegister ? <UserPlus className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
+            {isRegister ? 'Utwórz konto' : 'Zaloguj się'}
           </button>
-        </div>
+        </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-amber-600" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
