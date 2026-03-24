@@ -1,1 +1,1 @@
-trigger redeploy with env vars
+trigger redeploy with nextjs framework preset
