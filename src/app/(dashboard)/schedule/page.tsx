@@ -8,6 +8,7 @@ import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile, ShiftDefinition, ScheduleEntry } from '@/lib/types';
 
 interface ScheduleEntryWithRelations extends ScheduleEntry {
+  notes?: string | null;
   profiles: Pick<Profile, 'id' | 'full_name' | 'email'>;
   shift_definitions: Pick<ShiftDefinition, 'id' | 'name' | 'start_time' | 'end_time' | 'color'>;
 }
@@ -185,6 +186,7 @@ export default function SchedulePage() {
                             const startTime = entry.custom_start_time || shift?.start_time;
                             const endTime = entry.custom_end_time || shift?.end_time;
                             const color = shift?.color || '#3b82f6';
+                            const notes = entry.notes;
 
                             return (
                               <div
@@ -194,7 +196,7 @@ export default function SchedulePage() {
                                   backgroundColor: color + '18',
                                   borderLeft: `3px solid ${color}`,
                                 }}
-                                title={entry.notes || undefined}
+                                title={notes || undefined}
                               >
                                 <div className="font-medium" style={{ color }}>
                                   {shift?.name || 'Zmiana'}
@@ -204,9 +206,9 @@ export default function SchedulePage() {
                                     {formatTime(startTime)} – {formatTime(endTime)}
                                   </div>
                                 )}
-                                {entry.notes && (
+                                {notes && (
                                   <div className="text-gray-400 mt-0.5 truncate max-w-[80px]">
-                                    {entry.notes}
+                                    {notes}
                                   </div>
                                 )}
                               </div>
