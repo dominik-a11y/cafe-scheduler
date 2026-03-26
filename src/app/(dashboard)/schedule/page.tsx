@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addDays, format, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
@@ -13,38 +13,307 @@ interface ScheduleEntryWithRelations extends ScheduleEntry {
   shift_definitions: Pick<ShiftDefinition, 'id' | 'name' | 'start_time' | 'end_time' | 'color'>;
 }
 
-function ShiftBadge({ entry }: { entry: ScheduleEntryWithRelations }) {
+/* ─── helpers ─── */
+
+/** Convert "HH:MM" or "HH:MM:SS" to fractional hours */
+function timeToHours(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h + m / 60;
+}
+
+/** Determine the visible hour range for a day's entries (padded ±1 h) */
+function dayBounds(entries: ScheduleEntryWithRelations[], fallbackStart = 7, fallbackEnd = 22) {
+  if (entries.length === 0) return { startHour: fallbackStart, endHour: fallbackEnd };
+  let min = 24;
+  let max = 0;
+  for (const e of entries) {
+    const s = timeToHours(e.custom_start_time || e.shift_definitions?.start_time || '08:00');
+    const en = timeToHours(e.custom_end_time || e.shift_definitions?.end_time || '16:00');
+    if (s < min) min = s;
+    if (en > max) max = en;
+  }
+  return {
+    startHour: Math.max(0, Math.floor(min) - 1),
+    endHour: Math.min(24, Math.ceil(max) + 1),
+  };
+}
+
+/* ─── constants ─── */
+const HOUR_HEIGHT = 56; // px per hour
+
+/* ─── components ─── */
+
+function TimelineBlock({
+  entry,
+  startHour,
+  columnIndex,
+  totalColumns,
+}: {
+  entry: ScheduleEntryWithRelations;
+  startHour: number;
+  columnIndex: number;
+  totalColumns: number;
+}) {
   const shift = entry.shift_definitions;
-  const startTime = entry.custom_start_time || shift?.start_time;
-  const endTime = entry.custom_end_time || shift?.end_time;
+  const sTime = entry.custom_start_time || shift?.start_time || '08:00';
+  const eTime = entry.custom_end_time || shift?.end_time || '16:00';
   const color = shift?.color || '#3b82f6';
-  const notes = entry.notes;
+
+  const topH = timeToHours(sTime) - startHour;
+  const height = timeToHours(eTime) - timeToHours(sTime);
+
+  const colWidth = 100 / totalColumns;
 
   return (
     <div
-      className="rounded-md px-2 py-1.5 text-xs leading-tight"
+      className="absolute rounded-lg overflow-hidden text-xs transition-shadow hover:shadow-md"
       style={{
-        backgroundColor: color + '18',
+        top: `${topH * HOUR_HEIGHT}px`,
+        height: `${Math.max(height * HOUR_HEIGHT - 2, 20)}px`,
+        left: `${columnIndex * colWidth}%`,
+        width: `${colWidth - 1}%`,
+        backgroundColor: color + '22',
         borderLeft: `3px solid ${color}`,
       }}
-      title={notes || undefined}
     >
-      <div className="font-medium" style={{ color }}>
-        {shift?.name || 'Zmiana'}
-      </div>
-      {startTime && endTime && (
-        <div className="text-gray-500 mt-0.5">
-          {startTime.slice(0, 5)} – {endTime.slice(0, 5)}
+      <div className="px-2 py-1.5 h-full flex flex-col">
+        <div className="font-semibold truncate" style={{ color }}>
+          {entry.profiles?.full_name || entry.profiles?.email || 'Pracownik'}
         </div>
-      )}
-      {notes && (
-        <div className="text-gray-400 mt-0.5 truncate max-w-[120px]">
-          {notes}
+        <div className="text-gray-500 mt-0.5">
+          {sTime.slice(0, 5)} – {eTime.slice(0, 5)}
+        </div>
+        {shift?.name && (
+          <div className="text-gray-400 mt-auto truncate text-[10px]">
+            {shift.name}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DayTimeline({
+  day,
+  dayIndex,
+  entries,
+  isToday,
+  globalStartHour,
+  globalEndHour,
+}: {
+  day: Date;
+  dayIndex: number;
+  entries: ScheduleEntryWithRelations[];
+  isToday: boolean;
+  globalStartHour: number;
+  globalEndHour: number;
+}) {
+  const totalHours = globalEndHour - globalStartHour;
+  const hours = Array.from({ length: totalHours + 1 }, (_, i) => globalStartHour + i);
+
+  // Assign columns: sort by start time, greedily assign to first non-overlapping column
+  const sorted = [...entries].sort((a, b) => {
+    const aS = timeToHours(a.custom_start_time || a.shift_definitions?.start_time || '08:00');
+    const bS = timeToHours(b.custom_start_time || b.shift_definitions?.start_time || '08:00');
+    return aS - bS;
+  });
+
+  const columns: { end: number }[] = [];
+  const assignment = new Map<string, number>();
+
+  for (const entry of sorted) {
+    const s = timeToHours(entry.custom_start_time || entry.shift_definitions?.start_time || '08:00');
+    const e = timeToHours(entry.custom_end_time || entry.shift_definitions?.end_time || '16:00');
+
+    let placed = false;
+    for (let c = 0; c < columns.length; c++) {
+      if (columns[c].end <= s) {
+        columns[c].end = e;
+        assignment.set(entry.id, c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      assignment.set(entry.id, columns.length);
+      columns.push({ end: e });
+    }
+  }
+
+  const totalColumns = Math.max(columns.length, 1);
+
+  return (
+    <div
+      className={`flex-1 min-w-0 rounded-xl border overflow-hidden ${
+        isToday ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200 bg-white'
+      }`}
+    >
+      {/* Day header */}
+      <div
+        className={`text-center py-2.5 border-b ${
+          isToday
+            ? 'bg-amber-100/60 border-amber-200'
+            : 'bg-gray-50 border-gray-200'
+        }`}
+      >
+        <div className={`text-xs font-medium ${isToday ? 'text-amber-700' : 'text-gray-500'}`}>
+          {DAY_NAMES_PL[dayIndex]?.slice(0, 3)}
+        </div>
+        <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-amber-800' : 'text-gray-900'}`}>
+          {format(day, 'd')}
+        </div>
+      </div>
+
+      {/* Timeline body */}
+      <div className="relative" style={{ height: `${totalHours * HOUR_HEIGHT}px` }}>
+        {/* Hour grid lines */}
+        {hours.slice(0, -1).map((h) => (
+          <div
+            key={h}
+            className="absolute left-0 right-0 border-t border-gray-100"
+            style={{ top: `${(h - globalStartHour) * HOUR_HEIGHT}px` }}
+          />
+        ))}
+
+        {/* Shift blocks */}
+        <div className="absolute inset-0 px-0.5">
+          {sorted.map((entry) => (
+            <TimelineBlock
+              key={entry.id}
+              entry={entry}
+              startHour={globalStartHour}
+              columnIndex={assignment.get(entry.id) || 0}
+              totalColumns={totalColumns}
+            />
+          ))}
+        </div>
+
+        {/* Empty state */}
+        {entries.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-xs text-gray-300">—</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MobileDayTimeline({
+  day,
+  dayIndex,
+  entries,
+  isToday,
+}: {
+  day: Date;
+  dayIndex: number;
+  entries: ScheduleEntryWithRelations[];
+  isToday: boolean;
+}) {
+  const { startHour, endHour } = dayBounds(entries);
+  const totalHours = endHour - startHour;
+  const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
+
+  // Assign columns
+  const sorted = [...entries].sort((a, b) => {
+    const aS = timeToHours(a.custom_start_time || a.shift_definitions?.start_time || '08:00');
+    const bS = timeToHours(b.custom_start_time || b.shift_definitions?.start_time || '08:00');
+    return aS - bS;
+  });
+
+  const columns: { end: number }[] = [];
+  const assignment = new Map<string, number>();
+
+  for (const entry of sorted) {
+    const s = timeToHours(entry.custom_start_time || entry.shift_definitions?.start_time || '08:00');
+    const e = timeToHours(entry.custom_end_time || entry.shift_definitions?.end_time || '16:00');
+    let placed = false;
+    for (let c = 0; c < columns.length; c++) {
+      if (columns[c].end <= s) {
+        columns[c].end = e;
+        assignment.set(entry.id, c);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      assignment.set(entry.id, columns.length);
+      columns.push({ end: e });
+    }
+  }
+
+  const totalColumns = Math.max(columns.length, 1);
+
+  return (
+    <div
+      className={`rounded-xl border overflow-hidden ${
+        isToday ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200 bg-white'
+      }`}
+    >
+      {/* Day header */}
+      <div
+        className={`px-4 py-2.5 flex items-center justify-between border-b ${
+          isToday
+            ? 'bg-amber-100/60 border-amber-200'
+            : 'bg-gray-50 border-gray-200'
+        }`}
+      >
+        <span className={`text-sm font-semibold ${isToday ? 'text-amber-800' : 'text-gray-900'}`}>
+          {DAY_NAMES_PL[dayIndex]}
+        </span>
+        <span className={`text-xs ${isToday ? 'text-amber-600 font-bold' : 'text-gray-500'}`}>
+          {format(day, 'dd.MM')}
+          {isToday && ' \u2022 dzi\u015b'}
+        </span>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="px-4 py-3 text-xs text-gray-400 italic">
+          Brak zaplanowanych zmian
+        </div>
+      ) : (
+        <div className="flex">
+          {/* Hour labels */}
+          <div className="flex-shrink-0 w-11 border-r border-gray-100">
+            {hours.slice(0, -1).map((h) => (
+              <div
+                key={h}
+                className="text-[10px] text-gray-400 text-right pr-1.5 border-t border-gray-100"
+                style={{ height: `${HOUR_HEIGHT}px` }}
+              >
+                {String(h).padStart(2, '0')}
+              </div>
+            ))}
+          </div>
+
+          {/* Timeline area */}
+          <div className="flex-1 relative" style={{ height: `${totalHours * HOUR_HEIGHT}px` }}>
+            {hours.slice(0, -1).map((h) => (
+              <div
+                key={h}
+                className="absolute left-0 right-0 border-t border-gray-100"
+                style={{ top: `${(h - startHour) * HOUR_HEIGHT}px` }}
+              />
+            ))}
+            <div className="absolute inset-0 px-1">
+              {sorted.map((entry) => (
+                <TimelineBlock
+                  key={entry.id}
+                  entry={entry}
+                  startHour={startHour}
+                  columnIndex={assignment.get(entry.id) || 0}
+                  totalColumns={totalColumns}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+/* ─── main page ─── */
 
 export default function SchedulePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -100,32 +369,28 @@ export default function SchedulePage() {
   const goToNextWeek = () => setCurrentDate((d) => addDays(d, 7));
   const goToToday = () => setCurrentDate(new Date());
 
-  function getEntriesForCell(employeeId: string, day: Date) {
-    return entries.filter(
-      (e) =>
-        e.profiles?.id === employeeId &&
-        isSameDay(new Date(e.date + 'T00:00:00'), day)
+  const entriesByDay = useMemo(() => {
+    return weekDays.map((day) =>
+      entries.filter((e) => isSameDay(new Date(e.date + 'T00:00:00'), day))
     );
-  }
+  }, [entries, weekStart.getTime()]);
 
-  function getEntriesForDay(day: Date) {
-    return entries.filter((e) =>
-      isSameDay(new Date(e.date + 'T00:00:00'), day)
-    );
-  }
+  // Compute global hour bounds across the whole week (for desktop: uniform axis)
+  const globalBounds = useMemo(() => {
+    const all = entries.length > 0 ? dayBounds(entries) : { startHour: 7, endHour: 22 };
+    return all;
+  }, [entries]);
 
   const todayCheck = (day: Date) => isSameDay(day, new Date());
 
-  const emptyState = (
-    <div className="text-center py-16 text-gray-500">
-      <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-      <p className="text-lg font-medium text-gray-700 mb-1">Brak pracowników</p>
-      <p>Dodaj pracowników, aby zobaczyć harmonogram.</p>
-    </div>
+  // Hour labels for desktop
+  const globalHours = Array.from(
+    { length: globalBounds.endHour - globalBounds.startHour + 1 },
+    (_, i) => globalBounds.startHour + i
   );
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -134,7 +399,7 @@ export default function SchedulePage() {
             Harmonogram
           </h1>
           <p className="text-gray-600 mt-1">
-            Tygodniowy grafik zmian pracowników
+            Tygodniowy grafik zmian pracownik&oacute;w
           </p>
         </div>
 
@@ -143,7 +408,7 @@ export default function SchedulePage() {
           <button
             onClick={goToPrevWeek}
             className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
-            aria-label="Poprzedni tydzień"
+            aria-label="Poprzedni tydzie\u0144"
           >
             <ChevronLeft size={20} />
           </button>
@@ -151,12 +416,12 @@ export default function SchedulePage() {
             onClick={goToToday}
             className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition text-sm font-medium"
           >
-            Dziś
+            Dzi\u015b
           </button>
           <button
             onClick={goToNextWeek}
             className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
-            aria-label="Następny tydzień"
+            aria-label="Nast\u0119pny tydzie\u0144"
           >
             <ChevronRight size={20} />
           </button>
@@ -165,7 +430,7 @@ export default function SchedulePage() {
 
       {/* Week range label */}
       <div className="mb-4 text-sm text-gray-500">
-        {formatDatePL(weekStart, 'd MMMM')} – {formatDatePL(weekEnd, 'd MMMM yyyy')}
+        {formatDatePL(weekStart, 'd MMMM')} &ndash; {formatDatePL(weekEnd, 'd MMMM yyyy')}
       </div>
 
       {loading ? (
@@ -173,132 +438,55 @@ export default function SchedulePage() {
           <div className="text-gray-500">Wczytywanie harmonogramu...</div>
         </div>
       ) : employees.length === 0 ? (
-        emptyState
+        <div className="text-center py-16 text-gray-500">
+          <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+          <p className="text-lg font-medium text-gray-700 mb-1">Brak pracownik&oacute;w</p>
+          <p>Dodaj pracownik&oacute;w, aby zobaczy\u0107 harmonogram.</p>
+        </div>
       ) : (
         <>
-          {/* ===================== MOBILE: day-by-day cards ===================== */}
+          {/* =================== MOBILE: vertical day timelines =================== */}
           <div className="lg:hidden space-y-3">
-            {weekDays.map((day, i) => {
-              const dayEntries = getEntriesForDay(day);
-              const today = todayCheck(day);
-
-              return (
-                <div
-                  key={i}
-                  className={`rounded-lg border overflow-hidden ${
-                    today
-                      ? 'border-amber-300 bg-amber-50/40'
-                      : 'border-gray-200 bg-white'
-                  }`}
-                >
-                  {/* Day header */}
-                  <div
-                    className={`px-4 py-2.5 flex items-center justify-between ${
-                      today
-                        ? 'bg-amber-100/60 border-b border-amber-200'
-                        : 'bg-gray-50 border-b border-gray-200'
-                    }`}
-                  >
-                    <span className={`text-sm font-semibold ${today ? 'text-amber-800' : 'text-gray-900'}`}>
-                      {DAY_NAMES_PL[i]}
-                    </span>
-                    <span className={`text-xs ${today ? 'text-amber-600 font-bold' : 'text-gray-500'}`}>
-                      {format(day, 'dd.MM')}
-                      {today && ' • dziś'}
-                    </span>
-                  </div>
-
-                  {/* Employees for this day */}
-                  <div className="divide-y divide-gray-100">
-                    {employees.map((emp) => {
-                      const cellEntries = getEntriesForCell(emp.id, day);
-                      if (cellEntries.length === 0) return null;
-
-                      return (
-                        <div key={emp.id} className="px-4 py-2.5 flex items-start gap-3">
-                          <div className="flex-shrink-0 w-24">
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {emp.full_name || emp.email}
-                            </div>
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            {cellEntries.map((entry) => (
-                              <ShiftBadge key={entry.id} entry={entry} />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* If no entries for this day at all */}
-                    {dayEntries.length === 0 && (
-                      <div className="px-4 py-3 text-xs text-gray-400 italic">
-                        Brak zaplanowanych zmian
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {weekDays.map((day, i) => (
+              <MobileDayTimeline
+                key={i}
+                day={day}
+                dayIndex={i}
+                entries={entriesByDay[i]}
+                isToday={todayCheck(day)}
+              />
+            ))}
           </div>
 
-          {/* ===================== DESKTOP: classic table ===================== */}
-          <div className="hidden lg:block overflow-x-auto border border-gray-200 rounded-lg">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left text-sm font-medium text-gray-600 p-3 border-b border-r border-gray-200 w-40 sticky left-0 bg-gray-50 z-10">
-                    Pracownik
-                  </th>
-                  {weekDays.map((day, i) => (
-                    <th
-                      key={i}
-                      className={`text-center text-sm font-medium p-3 border-b border-r border-gray-200 last:border-r-0 ${
-                        todayCheck(day)
-                          ? 'bg-amber-50 text-amber-800'
-                          : 'text-gray-600'
-                      }`}
-                    >
-                      <div>{DAY_NAMES_PL[i]}</div>
-                      <div className={`text-xs mt-0.5 ${todayCheck(day) ? 'font-bold' : 'font-normal'}`}>
-                        {format(day, 'dd.MM')}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50/50">
-                    <td className="text-sm text-gray-900 p-3 border-b border-r border-gray-200 font-medium sticky left-0 bg-white z-10">
-                      <div className="truncate max-w-[150px]">
-                        {emp.full_name || emp.email}
-                      </div>
-                      <div className="text-xs text-gray-400 font-normal">
-                        {emp.role === 'admin' ? 'Admin' : 'Pracownik'}
-                      </div>
-                    </td>
-                    {weekDays.map((day, dayIdx) => {
-                      const cellEntries = getEntriesForCell(emp.id, day);
-                      return (
-                        <td
-                          key={dayIdx}
-                          className={`p-2 border-b border-r border-gray-200 last:border-r-0 align-top min-w-[100px] ${
-                            todayCheck(day) ? 'bg-amber-50/30' : ''
-                          }`}
-                        >
-                          <div className="space-y-1">
-                            {cellEntries.map((entry) => (
-                              <ShiftBadge key={entry.id} entry={entry} />
-                            ))}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* =================== DESKTOP: 7-column timeline =================== */}
+          <div className="hidden lg:flex gap-0 overflow-x-auto">
+            {/* Hour gutter */}
+            <div className="flex-shrink-0 w-12 pt-[60px]">
+              {globalHours.slice(0, -1).map((h) => (
+                <div
+                  key={h}
+                  className="text-xs text-gray-400 text-right pr-2"
+                  style={{ height: `${HOUR_HEIGHT}px` }}
+                >
+                  {String(h).padStart(2, '0')}:00
+                </div>
+              ))}
+            </div>
+
+            {/* Day columns */}
+            <div className="flex-1 flex gap-1.5">
+              {weekDays.map((day, i) => (
+                <DayTimeline
+                  key={i}
+                  day={day}
+                  dayIndex={i}
+                  entries={entriesByDay[i]}
+                  isToday={todayCheck(day)}
+                  globalStartHour={globalBounds.startHour}
+                  globalEndHour={globalBounds.endHour}
+                />
+              ))}
+            </div>
           </div>
         </>
       )}
