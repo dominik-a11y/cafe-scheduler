@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Coffee, LogOut, Menu, X } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Coffee, LogOut, Menu, X, CalendarDays, ClipboardCheck, Shield } from 'lucide-react';
 import type { Profile } from '@/lib/types';
 
 export default function Sidebar() {
@@ -12,6 +12,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const supabase = createClient();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -38,6 +39,11 @@ export default function Sidebar() {
     router.push('/login');
   };
 
+  const navLinks = [
+    { href: '/schedule', label: 'Harmonogram', icon: CalendarDays },
+    { href: '/availability', label: 'Dyspozycyjność', icon: ClipboardCheck },
+  ];
+
   return (
     <>
       {/* Mobile menu button */}
@@ -53,40 +59,53 @@ export default function Sidebar() {
         className={`${
           mobileOpen
             ? 'fixed inset-0 z-40 bg-white'
-            : 'hidden lg:flex lg:w-64 lg:flex-col lg:h-screen'
+            : 'hidden lg:flex lg:w-48 lg:flex-shrink-0 lg:flex-col'
         } flex-col border-r border-gray-200`}
       >
         {/* Logo */}
-        <div className="p-6 flex items-center gap-2">
-          <Coffee className="w-8 h-8 text-amber-600" />
-          <span className="font-semibold text-gray-900">Café Scheduler</span>
+        <div className="p-4 flex items-center gap-2">
+          <Coffee className="w-6 h-6 text-amber-600" />
+          <span className="font-semibold text-sm text-gray-900">Café Scheduler</span>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-6 space-y-2">
-          <Link
-            href="/schedule"
-            onClick={() => setMobileOpen(false)}
-            className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition"
-          >
-            Harmonogram
-          </Link>
+        <nav className="flex-1 px-3 space-y-1">
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition ${
+                  isActive ? 'bg-amber-50 text-amber-700 font-medium' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Icon size={18} />
+                {link.label}
+              </Link>
+            );
+          })}
           {profile?.role === 'admin' && (
             <Link
               href="/admin"
               onClick={() => setMobileOpen(false)}
-              className="block px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 transition"
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition ${
+                pathname.startsWith('/admin') ? 'bg-amber-50 text-amber-700 font-medium' : 'text-gray-700 hover:bg-gray-100'
+              }`}
             >
+              <Shield size={18} />
               Panel Admin
             </Link>
           )}
         </nav>
 
         {/* User Profile */}
-        <div className="p-6 border-t border-gray-200">
+        <div className="p-4 border-t border-gray-200">
           {profile && (
-            <div className="mb-4">
-              <p className="text-sm font-medium text-gray-900">
+            <div className="mb-3">
+              <p className="text-sm font-medium text-gray-900 truncate">
                 {profile.full_name || profile.email}
               </p>
               <p className="text-xs text-gray-500">

@@ -25,7 +25,6 @@ export default function DashboardLayout({
         return;
       }
 
-      // Ensure profile exists, create default admin if first user
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -33,7 +32,6 @@ export default function DashboardLayout({
         .single();
 
       if (!profile) {
-        // First user becomes admin
         const { data: allProfiles } = await supabase
           .from('profiles')
           .select('id', { count: 'exact' });
@@ -66,9 +64,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex gap-8 p-8 max-w-7xl mx-auto">
+    <div className="flex gap-4 p-4 lg:gap-6 lg:p-6 max-w-7xl mx-auto">
       <Sidebar />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 min-w-0">{children}</main>
     </div>
   );
 }
