@@ -54,41 +54,83 @@ function TimelineBlock({
   columnIndex: number;
   totalColumns: number;
 }) {
+  const [hovered, setHovered] = useState(false);
   const shift = entry.shift_definitions;
   const sTime = entry.custom_start_time || shift?.start_time || '08:00';
   const eTime = entry.custom_end_time || shift?.end_time || '16:00';
   const color = shift?.color || '#3b82f6';
+  const name = entry.profiles?.full_name || entry.profiles?.email || 'Pracownik';
 
   const topH = timeToHours(sTime) - startHour;
   const height = timeToHours(eTime) - timeToHours(sTime);
 
   const colWidth = 100 / totalColumns;
 
+  const tooltipText = `${name}\n${sTime.slice(0, 5)} \u2013 ${eTime.slice(0, 5)}${shift?.name ? `\n${shift.name}` : ''}${entry.notes ? `\n${entry.notes}` : ''}`;
+
   return (
     <div
-      className="absolute rounded-lg overflow-hidden text-xs transition-shadow hover:shadow-md"
+      className="absolute rounded-lg overflow-visible text-xs group"
       style={{
         top: `${topH * HOUR_HEIGHT}px`,
         height: `${Math.max(height * HOUR_HEIGHT - 2, 20)}px`,
         left: `${columnIndex * colWidth}%`,
         width: `${colWidth - 1}%`,
-        backgroundColor: color + '22',
-        borderLeft: `3px solid ${color}`,
+        zIndex: hovered ? 30 : 10,
       }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={tooltipText}
     >
-      <div className="px-2 py-1.5 h-full flex flex-col">
-        <div className="font-semibold truncate" style={{ color }}>
-          {entry.profiles?.full_name || entry.profiles?.email || 'Pracownik'}
-        </div>
-        <div className="text-gray-500 mt-0.5">
-          {sTime.slice(0, 5)} – {eTime.slice(0, 5)}
-        </div>
-        {shift?.name && (
-          <div className="text-gray-400 mt-auto truncate text-[10px]">
-            {shift.name}
+      {/* Block body */}
+      <div
+        className="rounded-lg h-full overflow-hidden transition-shadow group-hover:shadow-lg group-hover:ring-2 group-hover:ring-offset-1"
+        style={{
+          backgroundColor: color + '22',
+          borderLeft: `3px solid ${color}`,
+          '--tw-ring-color': color + '55',
+        } as React.CSSProperties}
+      >
+        <div className="px-2 py-1.5 h-full flex flex-col">
+          <div className="font-semibold truncate" style={{ color }}>
+            {name}
           </div>
-        )}
+          <div className="text-gray-500 mt-0.5">
+            {sTime.slice(0, 5)} &ndash; {eTime.slice(0, 5)}
+          </div>
+          {shift?.name && (
+            <div className="text-gray-400 mt-auto truncate text-[10px]">
+              {shift.name}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Hover tooltip - positioned above the block */}
+      {hovered && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 pointer-events-none"
+          style={{ zIndex: 50 }}
+        >
+          <div
+            className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap"
+            style={{ minWidth: '140px' }}
+          >
+            <div className="font-semibold">{name}</div>
+            <div className="text-gray-300 mt-0.5">
+              {sTime.slice(0, 5)} &ndash; {eTime.slice(0, 5)}
+            </div>
+            {shift?.name && (
+              <div className="text-gray-400 mt-0.5">{shift.name}</div>
+            )}
+            {entry.notes && (
+              <div className="text-gray-400 mt-1 italic">{entry.notes}</div>
+            )}
+            {/* Arrow */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-gray-900" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -144,7 +186,7 @@ function DayTimeline({
 
   return (
     <div
-      className={`flex-1 min-w-0 rounded-xl border overflow-hidden ${
+      className={`flex-1 min-w-0 rounded-xl border overflow-visible ${
         isToday ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200 bg-white'
       }`}
     >
@@ -191,7 +233,7 @@ function DayTimeline({
         {/* Empty state */}
         {entries.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs text-gray-300">—</span>
+            <span className="text-xs text-gray-300">&mdash;</span>
           </div>
         )}
       </div>
@@ -246,7 +288,7 @@ function MobileDayTimeline({
 
   return (
     <div
-      className={`rounded-xl border overflow-hidden ${
+      className={`rounded-xl border overflow-visible ${
         isToday ? 'border-amber-300 bg-amber-50/30' : 'border-gray-200 bg-white'
       }`}
     >
@@ -408,7 +450,7 @@ export default function SchedulePage() {
           <button
             onClick={goToPrevWeek}
             className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
-            aria-label="Poprzedni tydzie\u0144"
+            aria-label="Poprzedni tydzie&#324;"
           >
             <ChevronLeft size={20} />
           </button>
@@ -416,12 +458,12 @@ export default function SchedulePage() {
             onClick={goToToday}
             className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition text-sm font-medium"
           >
-            Dzi\u015b
+            Dzi&#347;
           </button>
           <button
             onClick={goToNextWeek}
             className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition"
-            aria-label="Nast\u0119pny tydzie\u0144"
+            aria-label="Nast&#281;pny tydzie&#324;"
           >
             <ChevronRight size={20} />
           </button>
@@ -441,7 +483,7 @@ export default function SchedulePage() {
         <div className="text-center py-16 text-gray-500">
           <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-300" />
           <p className="text-lg font-medium text-gray-700 mb-1">Brak pracownik&oacute;w</p>
-          <p>Dodaj pracownik&oacute;w, aby zobaczy\u0107 harmonogram.</p>
+          <p>Dodaj pracownik&oacute;w, aby zobaczy&#263; harmonogram.</p>
         </div>
       ) : (
         <>
