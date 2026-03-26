@@ -33,11 +33,6 @@ const MONTH_NAMES_PL = [
   'Lipiec', 'Sierpie\u0144', 'Wrzesie\u0144', 'Pa\u017adziernik', 'Listopad', 'Grudzie\u0144',
 ];
 
-const MONTH_NAMES_PL_GENITIVE = [
-  'stycznia', 'lutego', 'marca', 'kwietnia', 'maja', 'czerwca',
-  'lipca', 'sierpnia', 'wrze\u015bnia', 'pa\u017adziernika', 'listopada', 'grudnia',
-];
-
 function loadRates(): Record<string, number> {
   try {
     const raw = localStorage.getItem('cafe_hourly_rates');
@@ -62,19 +57,16 @@ async function generatePdf(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Title
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Rejestr godzin realizacji zlecenia', pageWidth / 2, 20, { align: 'center' });
 
-  // Subtitle
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text('Rozliczenie liczby godzin wykonywania uslug do umowy zlecenia nr ....................', 14, 32);
   doc.text(`w ${MONTH_NAMES_PL[month].toLowerCase()} ${year}`, 14, 39);
   doc.text(`Zleceniobiorca: ${employeeName}`, 14, 46);
 
-  // Build table data - one row per day of month
   const daysInMonth = getDaysInMonth(new Date(year, month));
   const tableBody: (string | number)[][] = [];
   let totalHours = 0;
@@ -86,7 +78,6 @@ async function generatePdf(
     if (dayEntries.length === 0) {
       tableBody.push([`${day}.`, '', '', '']);
     } else {
-      // Combine all entries for this day
       let dayHours = 0;
       const timeRanges: string[] = [];
 
@@ -105,11 +96,9 @@ async function generatePdf(
     }
   }
 
-  // Total row
   const totalStr = totalHours % 1 === 0 ? String(totalHours) : totalHours.toFixed(1);
   tableBody.push([{ content: 'Lacznie', styles: { fontStyle: 'bold' } } as any, { content: `${totalStr} h`, styles: { fontStyle: 'bold' } } as any, '', '']);
 
-  // Draw table
   (doc as any).autoTable({
     startY: 52,
     head: [['Dzien\nmiesiaca', 'Liczba godzin\nrealizacji zlecenia', 'Podpis\nzleceniobiorcy', 'Podpis\nzleceniodawcy']],
@@ -141,7 +130,6 @@ async function generatePdf(
     margin: { left: 14, right: 14 },
   });
 
-  // Download
   const fileName = `rejestr_godzin_${employeeName.replace(/\s+/g, '_')}_${MONTH_NAMES_PL[month].toLowerCase()}_${year}.pdf`;
   doc.save(fileName);
 }
@@ -260,7 +248,6 @@ export default function ReportsPage() {
   const handlePdfExport = async (stat: EmployeeStats) => {
     setPdfLoading(stat.id);
     try {
-      // For PDF we always need full month data
       const m = viewMode === 'month' ? currentMonth : currentDate.getMonth();
       const y = viewMode === 'month' ? currentYear : currentDate.getFullYear();
       const { start: ms, end: me } = getMonthRange(y, m);
@@ -401,8 +388,91 @@ export default function ReportsPage() {
             </div>
           )}
 
-          {/* Per-employee table */}
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
+          {/* =================== MOBILE: card layout =================== */}
+          <div className="sm:hidden space-y-3">
+            {employeeStats.map((stat) => {
+              const rate = rates[stat.id] || 0;
+              const salary = stat.totalHours * rate;
+              return (
+                <div key={stat.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">{stat.name}</div>
+                      <div className="text-xs text-gray-400">{stat.email}</div>
+                    </div>
+                    <button
+                      onClick={() => handlePdfExport(stat)}
+                      disabled={pdfLoading === stat.id}
+                      title="Eksportuj PDF"
+                      className="p-1.5 rounded-lg hover:bg-gray-100 transition text-gray-500 hover:text-amber-700 disabled:opacity-50"
+                    >
+                      <FileDown size={16} className={pdfLoading === stat.id ? 'animate-pulse' : ''} />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                    <div>
+                      <span className="text-gray-500">Zmian: </span>
+                      <span className="font-semibold">{stat.shiftCount}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Godziny: </span>
+                      <span className="font-semibold">{stat.totalHours.toFixed(1)} h</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="text-xs text-gray-500 flex-shrink-0">Stawka/h:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={rate || ''}
+                      onChange={(e) => updateRate(stat.id, e.target.value)}
+                      placeholder="0"
+                      className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                    />
+                    <span className="text-xs text-gray-400">z\u0142</span>
+                  </div>
+
+                  {salary > 0 && (
+                    <div className="text-sm font-semibold text-green-700 bg-green-50 rounded-lg px-3 py-1.5 text-center">
+                      Wynagrodzenie: {salary.toFixed(2)} z\u0142
+                    </div>
+                  )}
+
+                  {Object.keys(stat.shifts).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {Object.entries(stat.shifts).map(([name, data]) => (
+                        <span key={name} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]"
+                          style={{ backgroundColor: data.color + '20', color: data.color }}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: data.color }} />
+                          {name}: {data.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Mobile total */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="text-sm font-semibold text-gray-700 mb-2">Razem</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div><span className="text-gray-500">Zmian: </span><span className="font-semibold">{totalShiftsAll}</span></div>
+                <div><span className="text-gray-500">Godziny: </span><span className="font-semibold">{totalHoursAll.toFixed(1)} h</span></div>
+              </div>
+              {totalSalaryAll > 0 && (
+                <div className="text-sm font-semibold text-green-700 mt-2">
+                  Wynagrodzenia: {totalSalaryAll.toFixed(2)} z\u0142
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* =================== DESKTOP: table layout =================== */}
+          <div className="hidden sm:block border border-gray-200 rounded-lg overflow-hidden">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gray-50">
@@ -411,6 +481,7 @@ export default function ReportsPage() {
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200">Godziny</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 w-24">Stawka/h</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200">Wynagrodzenie</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 hidden lg:table-cell">Rozk\u0142ad zmian</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 w-12">PDF</th>
                 </tr>
               </thead>
@@ -423,14 +494,6 @@ export default function ReportsPage() {
                       <td className="p-3 border-b border-gray-100">
                         <div className="text-sm font-medium text-gray-900">{stat.name}</div>
                         <div className="text-xs text-gray-400">{stat.email}</div>
-                        <div className="flex flex-wrap gap-1 mt-1 sm:hidden">
-                          {Object.entries(stat.shifts).map(([name, data]) => (
-                            <span key={name} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]"
-                              style={{ backgroundColor: data.color + '20', color: data.color }}>
-                              {name}: {data.count}
-                            </span>
-                          ))}
-                        </div>
                       </td>
                       <td className="p-3 border-b border-gray-100 text-center">
                         <span className="text-sm font-semibold text-gray-900">{stat.shiftCount}</span>
@@ -453,6 +516,17 @@ export default function ReportsPage() {
                         <span className={`text-sm font-semibold ${salary > 0 ? 'text-green-700' : 'text-gray-300'}`}>
                           {salary > 0 ? `${salary.toFixed(2)} z\u0142` : '\u2014'}
                         </span>
+                      </td>
+                      <td className="p-3 border-b border-gray-100 hidden lg:table-cell">
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(stat.shifts).map(([name, data]) => (
+                            <span key={name} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                              style={{ backgroundColor: data.color + '20', color: data.color }}>
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: data.color }} />
+                              {name}: {data.count}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="p-3 border-b border-gray-100 text-center">
                         <button
@@ -477,6 +551,7 @@ export default function ReportsPage() {
                   <td className="p-3 text-center text-sm text-green-700">
                     {totalSalaryAll > 0 ? `${totalSalaryAll.toFixed(2)} z\u0142` : '\u2014'}
                   </td>
+                  <td className="p-3 hidden lg:table-cell"></td>
                   <td className="p-3"></td>
                 </tr>
               </tfoot>
