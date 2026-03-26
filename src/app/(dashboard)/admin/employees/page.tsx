@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { UserPlus, Trash2, Copy, Check, X } from 'lucide-react';
+import { UserPlus, Trash2, Copy, Check, Mail, Loader2 } from 'lucide-react';
 import type { Profile, Invitation } from '@/lib/types';
 
 export default function EmployeesPage() {
@@ -37,7 +37,7 @@ export default function EmployeesPage() {
   const showMessage = (text: string, type: 'success' | 'error' = 'success') => {
     setMsg(text);
     setMsgType(type);
-    setTimeout(() => setMsg(''), 4000);
+    setTimeout(() => setMsg(''), 5000);
   };
 
   const getInviteLink = (token: string) => {
@@ -58,16 +58,29 @@ export default function EmployeesPage() {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     setSending(true);
-    const token = crypto.randomUUID();
-    const { error } = await supabase.from('invitations').insert([{ email, role, token }]);
-    if (error) {
-      showMessage('Błąd: ' + error.message, 'error');
-    } else {
-      showMessage('Zaproszenie utworzone! Skopiuj link i wyślij pracownikowi.');
-      setEmail('');
-      setShowInvite(false);
-      fetchData();
+
+    try {
+      // Call API to send email invite via Supabase Admin
+      const res = await fetch('/api/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, role }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showMessage('Błąd: ' + (data.error || 'Nieznany błąd'), 'error');
+      } else {
+        showMessage('Zaproszenie wysłane na ' + email + '! Pracownik otrzyma maila z linkiem.');
+        setEmail('');
+        setShowInvite(false);
+        fetchData();
+      }
+    } catch (err) {
+      showMessage('Błąd połączenia z serwerem', 'error');
     }
+
     setSending(false);
   };
 
@@ -118,16 +131,22 @@ export default function EmployeesPage() {
       )}
 
       {showInvite && (
-        <form onSubmit={handleInvite} className="mb-6 p-4 bg-white border border-gray-200 rounded-lg flex flex-col sm:flex-row gap-3">
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
-          <select value={role} onChange={(e) => setRole(e.target.value as 'employee' | 'admin')}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            <option value="employee">Pracownik</option>
-            <option value="admin">Admin</option>
-          </select>
-          <button type="submit" disabled={sending}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">Utwórz zaproszenie</button>
+        <form onSubmit={handleInvite} className="mb-6 p-4 bg-white border border-gray-200 rounded-lg">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <select value={role} onChange={(e) => setRole(e.target.value as 'employee' | 'admin')}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+              <option value="employee">Pracownik</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button type="submit" disabled={sending}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              {sending ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+              {sending ? 'Wysyłanie...' : 'Wyślij zaproszenie'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Pracownik otrzyma maila z linkiem do rejestracji.</p>
         </form>
       )}
 
