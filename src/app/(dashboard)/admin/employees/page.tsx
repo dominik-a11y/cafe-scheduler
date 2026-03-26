@@ -60,17 +60,29 @@ export default function EmployeesPage() {
     setSending(true);
 
     try {
-      // Use supabase.functions.invoke — automatically sends apikey + user JWT
-      const { data, error } = await supabase.functions.invoke('send-invite', {
-        body: { email, role },
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showMessage('Brak sesji — zaloguj się ponownie', 'error');
+        setSending(false);
+        return;
+      }
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ email, role }),
       });
 
-      if (error) {
-        showMessage('Błąd: ' + (error.message || 'Nieznany błąd'), 'error');
-      } else if (data?.error) {
-        showMessage('Błąd: ' + data.error, 'error');
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        showMessage('Błąd: ' + (data.error || `Status ${res.status}`), 'error');
       } else {
-        showMessage('Zaproszenie wysłane na ' + email + '! Pracownik otrzyma maila z linkiem.');
+        showMessage(data.message || 'Zaproszenie wysłane na ' + email);
         setEmail('');
         setShowInvite(false);
         fetchData();
