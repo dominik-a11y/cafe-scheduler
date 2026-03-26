@@ -19,6 +19,26 @@ interface AvailabilityEntry {
   profiles?: Pick<Profile, 'id' | 'full_name' | 'email'>;
 }
 
+function buildScheduleEntry(avail: AvailabilityEntry, createdBy: string): Record<string, unknown> {
+  const entry: Record<string, unknown> = {
+    user_id: avail.user_id,
+    date: avail.date,
+    created_by: createdBy,
+  };
+
+  if (avail.shift_definition_id) {
+    entry.shift_definition_id = avail.shift_definition_id;
+    entry.custom_start_time = null;
+    entry.custom_end_time = null;
+  } else {
+    entry.shift_definition_id = null;
+    entry.custom_start_time = avail.start_time;
+    entry.custom_end_time = avail.end_time;
+  }
+
+  return entry;
+}
+
 export default function AdminAvailabilityPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [entries, setEntries] = useState<AvailabilityEntry[]>([]);
@@ -57,26 +77,10 @@ export default function AdminAvailabilityPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Update availability status
       await supabase.from('availability').update({ status, reviewed_by: user.id }).eq('id', entry.id);
 
-      // If approved, also create a schedule entry so it appears on the schedule
       if (status === 'approved') {
-        const scheduleEntry: Record<string, unknown> = {
-          user_id: entry.user_id,
-          date: entry.date,
-        };
-
-        if (entry.shift_definition_id) {
-          scheduleEntry.shift_definition_id = entry.shift_definition_id;
-          scheduleEntry.custom_start_time = null;
-          scheduleEntry.custom_end_time = null;
-        } else {
-          scheduleEntry.shift_definition_id = null;
-          scheduleEntry.custom_start_time = entry.start_time;
-          scheduleEntry.custom_end_time = entry.end_time;
-        }
-
+        const scheduleEntry = buildScheduleEntry(entry, user.id);
         await supabase.from('schedule_entries').insert([scheduleEntry]);
       }
 
@@ -90,10 +94,15 @@ export default function AdminAvailabilityPage() {
     setSyncLoading(true);
     setSyncMessage(null);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSyncMessage('Brak sesji u\u017cytkownika.');
+        return;
+      }
+
       const startStr = format(weekStart, 'yyyy-MM-dd');
       const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-      // 1. Get all approved availability for this week
       const { data: approved, error: fetchError } = await supabase
         .from('availability')
         .select('*')
@@ -106,7 +115,6 @@ export default function AdminAvailabilityPage() {
         return;
       }
 
-      // 2. Delete existing schedule entries for this week
       const { error: deleteError } = await supabase
         .from('schedule_entries')
         .delete()
@@ -118,26 +126,10 @@ export default function AdminAvailabilityPage() {
         return;
       }
 
-      // 3. Re-create schedule entries from approved availability
       if (approved && approved.length > 0) {
-        const newEntries = approved.map((a: AvailabilityEntry) => {
-          const entry: Record<string, unknown> = {
-            user_id: a.user_id,
-            date: a.date,
-          };
-
-          if (a.shift_definition_id) {
-            entry.shift_definition_id = a.shift_definition_id;
-            entry.custom_start_time = null;
-            entry.custom_end_time = null;
-          } else {
-            entry.shift_definition_id = null;
-            entry.custom_start_time = a.start_time;
-            entry.custom_end_time = a.end_time;
-          }
-
-          return entry;
-        });
+        const newEntries = approved.map((a: AvailabilityEntry) =>
+          buildScheduleEntry(a, user.id)
+        );
 
         const { error: insertError } = await supabase
           .from('schedule_entries')
