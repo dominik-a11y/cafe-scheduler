@@ -60,10 +60,22 @@ export default function EmployeesPage() {
     setSending(true);
 
     try {
-      // Call API to send email invite via Supabase Admin
-      const res = await fetch('/api/send-invite', {
+      // Get current session token for Edge Function auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        showMessage('Brak sesji — zaloguj się ponownie', 'error');
+        setSending(false);
+        return;
+      }
+
+      // Call Supabase Edge Function to send invite email
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const res = await fetch(`${supabaseUrl}/functions/v1/send-invite`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ email, role }),
       });
 
