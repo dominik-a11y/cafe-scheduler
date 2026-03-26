@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { addDays, format, isSameDay } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { ChevronLeft, ChevronRight, Check, X } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile } from '@/lib/types';
@@ -14,6 +14,7 @@ interface AvailabilityEntry {
   start_time: string;
   end_time: string;
   status: 'pending' | 'approved' | 'rejected';
+  shift_definition_id: string | null;
   created_at: string;
   profiles?: Pick<Profile, 'id' | 'full_name' | 'email'>;
 }
@@ -23,6 +24,7 @@ export default function AdminAvailabilityPage() {
   const [entries, setEntries] = useState<AvailabilityEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending'>('pending');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const supabase = createClient();
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
 
@@ -47,10 +49,42 @@ export default function AdminAvailabilityPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleAction = async (id: string, status: 'approved' | 'rejected') => {
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from('availability').update({ status, reviewed_by: user?.id }).eq('id', id);
-    fetchData();
+  const handleAction = async (entry: AvailabilityEntry, status: 'approved' | 'rejected') => {
+    setActionLoading(entry.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update availability status
+      await supabase.from('availability').update({ status, reviewed_by: user.id }).eq('id', entry.id);
+
+      // If approved, also create a schedule entry so it appears on the schedule
+      if (status === 'approved') {
+        const scheduleEntry: Record<string, unknown> = {
+          user_id: entry.user_id,
+          date: entry.date,
+          created_by: user.id,
+        };
+
+        if (entry.shift_definition_id) {
+          // Pre-defined shift — use shift_definition_id, custom times only if different
+          scheduleEntry.shift_definition_id = entry.shift_definition_id;
+          scheduleEntry.custom_start_time = null;
+          scheduleEntry.custom_end_time = null;
+        } else {
+          // Manual hours — store as custom times, no shift definition
+          scheduleEntry.shift_definition_id = null;
+          scheduleEntry.custom_start_time = entry.start_time;
+          scheduleEntry.custom_end_time = entry.end_time;
+        }
+
+        await supabase.from('schedule_entries').insert([scheduleEntry]);
+      }
+
+      fetchData();
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const goToPrevWeek = () => setCurrentDate((d) => addDays(d, -7));
@@ -113,12 +147,12 @@ export default function AdminAvailabilityPage() {
               </div>
               {e.status === 'pending' && (
                 <div className="flex gap-2">
-                  <button onClick={() => handleAction(e.id, 'approved')}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition">
+                  <button onClick={() => handleAction(e, 'approved')} disabled={actionLoading === e.id}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition disabled:opacity-50">
                     <Check size={14} /> Zatwierdź
                   </button>
-                  <button onClick={() => handleAction(e.id, 'rejected')}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition">
+                  <button onClick={() => handleAction(e, 'rejected')} disabled={actionLoading === e.id}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition disabled:opacity-50">
                     <X size={14} /> Odrzuć
                   </button>
                 </div>
