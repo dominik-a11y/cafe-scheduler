@@ -12,6 +12,10 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ token_hash, type });
     if (!error) {
+      // If this is an invite, redirect to complete-profile page
+      if (type === 'invite') {
+        return NextResponse.redirect(`${origin}/complete-profile`);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
