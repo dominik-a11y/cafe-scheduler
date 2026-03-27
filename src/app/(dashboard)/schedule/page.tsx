@@ -246,15 +246,18 @@ function MobileDayTimeline({
   dayIndex,
   entries,
   isToday,
+  globalStartHour,
+  globalEndHour,
 }: {
   day: Date;
   dayIndex: number;
   entries: ScheduleEntryWithRelations[];
   isToday: boolean;
+  globalStartHour: number;
+  globalEndHour: number;
 }) {
-  const { startHour, endHour } = dayBounds(entries);
-  const totalHours = endHour - startHour;
-  const hours = Array.from({ length: totalHours + 1 }, (_, i) => startHour + i);
+  const totalHours = globalEndHour - globalStartHour;
+  const hours = Array.from({ length: totalHours + 1 }, (_, i) => globalStartHour + i);
 
   // Assign columns
   const sorted = [...entries].sort((a, b) => {
@@ -334,7 +337,7 @@ function MobileDayTimeline({
               <div
                 key={h}
                 className="absolute left-0 right-0 border-t border-gray-100"
-                style={{ top: `${(h - startHour) * HOUR_HEIGHT}px` }}
+                style={{ top: `${(h - globalStartHour) * HOUR_HEIGHT}px` }}
               />
             ))}
             <div className="absolute inset-0 px-1">
@@ -342,7 +345,7 @@ function MobileDayTimeline({
                 <TimelineBlock
                   key={entry.id}
                   entry={entry}
-                  startHour={startHour}
+                  startHour={globalStartHour}
                   columnIndex={assignment.get(entry.id) || 0}
                   totalColumns={totalColumns}
                 />
@@ -417,7 +420,7 @@ export default function SchedulePage() {
     );
   }, [entries, weekStart.getTime()]);
 
-  // Compute global hour bounds across the whole week (for desktop: uniform axis)
+  // Compute global hour bounds across the whole week (for both desktop and mobile: uniform axis)
   const globalBounds = useMemo(() => {
     const all = entries.length > 0 ? dayBounds(entries) : { startHour: 7, endHour: 22 };
     return all;
@@ -496,6 +499,8 @@ export default function SchedulePage() {
                 dayIndex={i}
                 entries={entriesByDay[i]}
                 isToday={todayCheck(day)}
+                globalStartHour={globalBounds.startHour}
+                globalEndHour={globalBounds.endHour}
               />
             ))}
           </div>
