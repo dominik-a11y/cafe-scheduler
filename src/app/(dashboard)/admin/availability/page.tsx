@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addDays, format } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, X, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, X, RefreshCw, Trash2 } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile } from '@/lib/types';
 
@@ -84,6 +84,24 @@ export default function AdminAvailabilityPage() {
         await supabase.from('schedule_entries').insert([scheduleEntry]);
       }
 
+      fetchData();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (entry: AvailabilityEntry) => {
+    setActionLoading(entry.id);
+    try {
+      // If approved, also remove corresponding schedule entry
+      if (entry.status === 'approved') {
+        await supabase
+          .from('schedule_entries')
+          .delete()
+          .eq('user_id', entry.user_id)
+          .eq('date', entry.date);
+      }
+      await supabase.from('availability').delete().eq('id', entry.id);
       fetchData();
     } finally {
       setActionLoading(null);
@@ -214,7 +232,7 @@ export default function AdminAvailabilityPage() {
         <div className="space-y-2">
           {entries.map((e) => (
             <div key={e.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white border border-gray-200 rounded-lg gap-3">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-900">{e.profiles?.full_name || e.profiles?.email || 'Pracownik'}</p>
                   <p className="text-xs text-gray-500">
@@ -226,18 +244,25 @@ export default function AdminAvailabilityPage() {
                 </div>
                 {statusBadge(e.status)}
               </div>
-              {e.status === 'pending' && (
-                <div className="flex gap-2">
-                  <button onClick={() => handleAction(e, 'approved')} disabled={actionLoading === e.id}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition disabled:opacity-50">
-                    <Check size={14} /> Zatwierd&#378;
-                  </button>
-                  <button onClick={() => handleAction(e, 'rejected')} disabled={actionLoading === e.id}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition disabled:opacity-50">
-                    <X size={14} /> Odrzu&#263;
-                  </button>
-                </div>
-              )}
+              <div className="flex gap-2">
+                {e.status === 'pending' && (
+                  <>
+                    <button onClick={() => handleAction(e, 'approved')} disabled={actionLoading === e.id}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition disabled:opacity-50">
+                      <Check size={14} /> Zatwierd&#378;
+                    </button>
+                    <button onClick={() => handleAction(e, 'rejected')} disabled={actionLoading === e.id}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                      <X size={14} /> Odrzu&#263;
+                    </button>
+                  </>
+                )}
+                <button onClick={() => handleDelete(e)} disabled={actionLoading === e.id}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-lg hover:bg-red-50 hover:text-red-600 transition disabled:opacity-50"
+                  title="Usuń wpis">
+                  <Trash2 size={14} /> Usuń
+                </button>
+              </div>
             </div>
           ))}
         </div>
