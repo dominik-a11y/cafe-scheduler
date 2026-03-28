@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addDays, format, isSameDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, Trash2, ClipboardCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, ClipboardCheck, Pencil } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { ShiftDefinition } from '@/lib/types';
 
@@ -24,7 +24,8 @@ export default function AvailabilityPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [shiftDefs, setShiftDefs] = useState<ShiftDefinition[]>([]);
-  const [addModeDay, setAddModeDay] = useState<string | null>(null); // date string of day currently showing add options
+  const [addModeDay, setAddModeDay] = useState<string | null>(null);
+  const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
 
   const supabase = createClient();
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
@@ -86,12 +87,18 @@ export default function AvailabilityPage() {
   };
 
   const updateSlot = async (id: string, field: string, value: string) => {
-    await supabase.from('availability').update({ [field]: value, shift_definition_id: null }).eq('id', id);
+    // When editing, reset status to pending so admin re-reviews
+    await supabase.from('availability').update({
+      [field]: value,
+      shift_definition_id: null,
+      status: 'pending',
+    }).eq('id', id);
     fetchData();
   };
 
   const deleteSlot = async (id: string) => {
     await supabase.from('availability').delete().eq('id', id);
+    setEditingSlotId(null);
     fetchData();
   };
 
@@ -110,6 +117,12 @@ export default function AvailabilityPage() {
     if (s === 'approved') return 'Zatwierdzony';
     if (s === 'rejected') return 'Odrzucony';
     return 'Oczekujący';
+  };
+
+  const statusDot = (s: string) => {
+    if (s === 'approved') return 'bg-green-500';
+    if (s === 'rejected') return 'bg-red-500';
+    return 'bg-amber-500';
   };
 
   const getShiftName = (slot: AvailabilitySlot) => {
@@ -209,25 +222,68 @@ export default function AvailabilityPage() {
                     <div className="divide-y divide-gray-100">
                       {daySlots.map((slot) => {
                         const shiftName = getShiftName(slot);
+                        const isEditing = editingSlotId === slot.id;
+                        const isApprovedOrRejected = slot.status !== 'pending';
+
                         return (
-                          <div key={slot.id} className={`px-4 py-2.5 flex items-center gap-3 ${statusColor(slot.status)} border-l-4`}>
-                            {shiftName && (
-                              <span className="text-xs font-medium text-gray-700 bg-white/70 px-2 py-0.5 rounded border border-gray-200">
-                                {shiftName}
-                              </span>
-                            )}
-                            <input type="time" value={slot.start_time} disabled={slot.status !== 'pending'}
-                              onChange={(e) => updateSlot(slot.id, 'start_time', e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100 disabled:text-gray-500" />
-                            <span className="text-gray-400">–</span>
-                            <input type="time" value={slot.end_time} disabled={slot.status !== 'pending'}
-                              onChange={(e) => updateSlot(slot.id, 'end_time', e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100 disabled:text-gray-500" />
-                            <span className="text-xs text-gray-500 ml-auto">{statusLabel(slot.status)}</span>
-                            {slot.status === 'pending' && (
-                              <button onClick={() => deleteSlot(slot.id)} className="p-1 text-gray-400 hover:text-red-600">
-                                <Trash2 size={14} />
-                              </button>
+                          <div key={slot.id} className={`px-4 py-2.5 ${statusColor(slot.status)} border-l-4`}>
+                            {/* Mobile-friendly layout */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {shiftName && (
+                                  <span className="text-xs font-medium text-gray-700 bg-white/70 px-2 py-0.5 rounded border border-gray-200 shrink-0">
+                                    {shiftName}
+                                  </span>
+                                )}
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <input type="time" value={slot.start_time}
+                                      onChange={(e) => updateSlot(slot.id, 'start_time', e.target.value)}
+                                      className="px-1.5 py-1 border border-gray-300 rounded text-sm w-24" />
+                                    <span className="text-gray-400">–</span>
+                                    <input type="time" value={slot.end_time}
+                                      onChange={(e) => updateSlot(slot.id, 'end_time', e.target.value)}
+                                      className="px-1.5 py-1 border border-gray-300 rounded text-sm w-24" />
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-gray-700">
+                                    {slot.start_time.slice(0, 5)} – {slot.end_time.slice(0, 5)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`w-2 h-2 rounded-full ${statusDot(slot.status)}`} title={statusLabel(slot.status)} />
+                                <span className="text-xs text-gray-500 hidden sm:inline">{statusLabel(slot.status)}</span>
+
+                                {!isEditing ? (
+                                  <button
+                                    onClick={() => setEditingSlotId(slot.id)}
+                                    className="p-1 text-gray-400 hover:text-blue-600 transition"
+                                    title="Edytuj"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => setEditingSlotId(null)}
+                                    className="px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+                                  >
+                                    OK
+                                  </button>
+                                )}
+
+                                <button onClick={() => deleteSlot(slot.id)} className="p-1 text-gray-400 hover:text-red-600 transition" title="Usuń">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Info when editing approved/rejected entry */}
+                            {isEditing && isApprovedOrRejected && (
+                              <p className="text-xs text-amber-600 mt-1.5">
+                                Po edycji status zmieni się na &quot;Oczekujący&quot; — admin będzie musiał ponownie zatwierdzić.
+                              </p>
                             )}
                           </div>
                         );
