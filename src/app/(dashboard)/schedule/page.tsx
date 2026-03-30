@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addDays, format, isSameDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Plus, Pencil, Trash2, X as XIcon } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile, ShiftDefinition, ScheduleEntry } from '@/lib/types';
 
@@ -48,11 +48,13 @@ function TimelineBlock({
   startHour,
   columnIndex,
   totalColumns,
+  onClick,
 }: {
   entry: ScheduleEntryWithRelations;
   startHour: number;
   columnIndex: number;
   totalColumns: number;
+  onClick?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const shift = entry.shift_definitions;
@@ -70,7 +72,7 @@ function TimelineBlock({
 
   return (
     <div
-      className="absolute rounded-lg overflow-visible text-xs group"
+      className={`absolute rounded-lg overflow-visible text-xs group ${onClick ? 'cursor-pointer' : ''}`}
       style={{
         top: `${topH * HOUR_HEIGHT}px`,
         height: `${Math.max(height * HOUR_HEIGHT - 2, 20)}px`,
@@ -80,6 +82,7 @@ function TimelineBlock({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onClick}
       title={tooltipText}
     >
       {/* Block body */}
@@ -142,6 +145,8 @@ function DayTimeline({
   isToday,
   globalStartHour,
   globalEndHour,
+  onEntryClick,
+  onAddClick,
 }: {
   day: Date;
   dayIndex: number;
@@ -149,6 +154,8 @@ function DayTimeline({
   isToday: boolean;
   globalStartHour: number;
   globalEndHour: number;
+  onEntryClick?: (entry: ScheduleEntryWithRelations) => void;
+  onAddClick?: () => void;
 }) {
   const totalHours = globalEndHour - globalStartHour;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => globalStartHour + i);
@@ -192,7 +199,7 @@ function DayTimeline({
     >
       {/* Day header */}
       <div
-        className={`text-center py-2.5 border-b ${
+        className={`text-center py-2.5 border-b relative ${
           isToday
             ? 'bg-amber-100/60 border-amber-200'
             : 'bg-gray-50 border-gray-200'
@@ -204,6 +211,13 @@ function DayTimeline({
         <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-amber-800' : 'text-gray-900'}`}>
           {format(day, 'd')}
         </div>
+        {onAddClick && (
+          <button onClick={onAddClick}
+            className="absolute top-1 right-1 p-0.5 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+            title="Dodaj wpis">
+            <Plus size={12} />
+          </button>
+        )}
       </div>
 
       {/* Timeline body */}
@@ -226,6 +240,7 @@ function DayTimeline({
               startHour={globalStartHour}
               columnIndex={assignment.get(entry.id) || 0}
               totalColumns={totalColumns}
+              onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
             />
           ))}
         </div>
@@ -248,6 +263,8 @@ function MobileDayTimeline({
   isToday,
   globalStartHour,
   globalEndHour,
+  onEntryClick,
+  onAddClick,
 }: {
   day: Date;
   dayIndex: number;
@@ -255,6 +272,8 @@ function MobileDayTimeline({
   isToday: boolean;
   globalStartHour: number;
   globalEndHour: number;
+  onEntryClick?: (entry: ScheduleEntryWithRelations) => void;
+  onAddClick?: () => void;
 }) {
   const totalHours = globalEndHour - globalStartHour;
   const hours = Array.from({ length: totalHours + 1 }, (_, i) => globalStartHour + i);
@@ -306,10 +325,19 @@ function MobileDayTimeline({
         <span className={`text-sm font-semibold ${isToday ? 'text-amber-800' : 'text-gray-900'}`}>
           {DAY_NAMES_PL[dayIndex]}
         </span>
-        <span className={`text-xs ${isToday ? 'text-amber-600 font-bold' : 'text-gray-500'}`}>
-          {format(day, 'dd.MM')}
-          {isToday && ' \u2022 dzi\u015b'}
-        </span>
+        <div className="flex items-center gap-2">
+          {onAddClick && (
+            <button onClick={onAddClick}
+              className="p-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+              title="Dodaj wpis">
+              <Plus size={14} />
+            </button>
+          )}
+          <span className={`text-xs ${isToday ? 'text-amber-600 font-bold' : 'text-gray-500'}`}>
+            {format(day, 'dd.MM')}
+            {isToday && ' \u2022 dzi\u015b'}
+          </span>
+        </div>
       </div>
 
       {entries.length === 0 ? (
@@ -348,12 +376,211 @@ function MobileDayTimeline({
                   startHour={globalStartHour}
                   columnIndex={assignment.get(entry.id) || 0}
                   totalColumns={totalColumns}
+                  onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
                 />
               ))}
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── edit modal (admin only) ─── */
+
+interface EditModalProps {
+  entry: ScheduleEntryWithRelations;
+  shiftDefs: ShiftDefinition[];
+  onClose: () => void;
+  onSave: (id: string, data: { custom_start_time: string; custom_end_time: string; shift_definition_id: string | null }) => void;
+  onDelete: (id: string) => void;
+}
+
+function EditEntryModal({ entry, shiftDefs, onClose, onSave, onDelete }: EditModalProps) {
+  const shift = entry.shift_definitions;
+  const [startTime, setStartTime] = useState(entry.custom_start_time || shift?.start_time || '08:00');
+  const [endTime, setEndTime] = useState(entry.custom_end_time || shift?.end_time || '16:00');
+  const [useShift, setUseShift] = useState<string | null>(entry.shift_definition_id);
+
+  const handleShiftSelect = (shiftId: string) => {
+    const s = shiftDefs.find((d) => d.id === shiftId);
+    if (s) {
+      setUseShift(shiftId);
+      setStartTime(s.start_time);
+      setEndTime(s.end_time);
+    }
+  };
+
+  const handleCustom = () => {
+    setUseShift(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Edytuj wpis</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded"><XIcon size={16} /></button>
+        </div>
+
+        <p className="text-xs text-gray-500 mb-3">
+          {entry.profiles?.full_name || entry.profiles?.email} — {format(new Date(entry.date + 'T00:00:00'), 'dd.MM.yyyy')}
+        </p>
+
+        {shiftDefs.length > 0 && (
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">Zmiana</label>
+            <div className="flex flex-wrap gap-1.5">
+              {shiftDefs.map((s) => (
+                <button key={s.id} onClick={() => handleShiftSelect(s.id)}
+                  className={`text-xs px-2.5 py-1 rounded-md border transition ${useShift === s.id ? 'ring-2 ring-offset-1' : ''}`}
+                  style={{
+                    backgroundColor: useShift === s.id ? s.color + '20' : undefined,
+                    borderColor: s.color + '60',
+                    color: s.color,
+                    '--tw-ring-color': s.color,
+                  } as React.CSSProperties}
+                >
+                  {s.name}
+                </button>
+              ))}
+              <button onClick={handleCustom}
+                className={`text-xs px-2.5 py-1 rounded-md border border-gray-300 transition ${useShift === null ? 'bg-gray-100 ring-2 ring-gray-400 ring-offset-1' : ''}`}>
+                Własne
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Od</label>
+            <input type="time" value={startTime.slice(0, 5)} onChange={(e) => { setStartTime(e.target.value); setUseShift(null); }}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Do</label>
+            <input type="time" value={endTime.slice(0, 5)} onChange={(e) => { setEndTime(e.target.value); setUseShift(null); }}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={() => onSave(entry.id, { custom_start_time: startTime, custom_end_time: endTime, shift_definition_id: useShift })}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
+            <Pencil size={14} /> Zapisz
+          </button>
+          <button onClick={() => { if (window.confirm('Usunąć ten wpis z harmonogramu?')) onDelete(entry.id); }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-red-50 text-red-600 text-sm rounded-lg hover:bg-red-100 transition">
+            <Trash2 size={14} /> Usuń
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── add entry modal (admin only) ─── */
+
+interface AddModalProps {
+  date: Date;
+  employees: Profile[];
+  shiftDefs: ShiftDefinition[];
+  onClose: () => void;
+  onAdd: (data: { user_id: string; date: string; shift_definition_id: string | null; custom_start_time: string | null; custom_end_time: string | null }) => void;
+}
+
+function AddEntryModal({ date, employees, shiftDefs, onClose, onAdd }: AddModalProps) {
+  const [userId, setUserId] = useState(employees[0]?.id || '');
+  const [startTime, setStartTime] = useState('08:00');
+  const [endTime, setEndTime] = useState('16:00');
+  const [useShift, setUseShift] = useState<string | null>(null);
+
+  const handleShiftSelect = (shiftId: string) => {
+    const s = shiftDefs.find((d) => d.id === shiftId);
+    if (s) {
+      setUseShift(shiftId);
+      setStartTime(s.start_time);
+      setEndTime(s.end_time);
+    }
+  };
+
+  const handleSubmit = () => {
+    onAdd({
+      user_id: userId,
+      date: format(date, 'yyyy-MM-dd'),
+      shift_definition_id: useShift,
+      custom_start_time: useShift ? null : startTime,
+      custom_end_time: useShift ? null : endTime,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Dodaj wpis</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded"><XIcon size={16} /></button>
+        </div>
+
+        <p className="text-xs text-gray-500 mb-3">
+          {DAY_NAMES_PL[date.getDay() === 0 ? 6 : date.getDay() - 1]}, {format(date, 'dd.MM.yyyy')}
+        </p>
+
+        <div className="mb-3">
+          <label className="text-xs text-gray-500 mb-1 block">Pracownik</label>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)}
+            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm">
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>{emp.full_name || emp.email}</option>
+            ))}
+          </select>
+        </div>
+
+        {shiftDefs.length > 0 && (
+          <div className="mb-3">
+            <label className="text-xs text-gray-500 mb-1 block">Zmiana</label>
+            <div className="flex flex-wrap gap-1.5">
+              {shiftDefs.map((s) => (
+                <button key={s.id} onClick={() => handleShiftSelect(s.id)}
+                  className={`text-xs px-2.5 py-1 rounded-md border transition ${useShift === s.id ? 'ring-2 ring-offset-1' : ''}`}
+                  style={{
+                    backgroundColor: useShift === s.id ? s.color + '20' : undefined,
+                    borderColor: s.color + '60',
+                    color: s.color,
+                    '--tw-ring-color': s.color,
+                  } as React.CSSProperties}
+                >
+                  {s.name}
+                </button>
+              ))}
+              <button onClick={() => setUseShift(null)}
+                className={`text-xs px-2.5 py-1 rounded-md border border-gray-300 transition ${useShift === null ? 'bg-gray-100 ring-2 ring-gray-400 ring-offset-1' : ''}`}>
+                Własne
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 mb-4">
+          <div className="flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Od</label>
+            <input type="time" value={startTime.slice(0, 5)} onChange={(e) => { setStartTime(e.target.value); setUseShift(null); }}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Do</label>
+            <input type="time" value={endTime.slice(0, 5)} onChange={(e) => { setEndTime(e.target.value); setUseShift(null); }}
+              className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm" />
+          </div>
+        </div>
+
+        <button onClick={handleSubmit}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
+          <Plus size={14} /> Dodaj do harmonogramu
+        </button>
+      </div>
     </div>
   );
 }
@@ -365,6 +592,11 @@ export default function SchedulePage() {
   const [entries, setEntries] = useState<ScheduleEntryWithRelations[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminId, setAdminId] = useState<string | null>(null);
+  const [shiftDefs, setShiftDefs] = useState<ShiftDefinition[]>([]);
+  const [editingEntry, setEditingEntry] = useState<ScheduleEntryWithRelations | null>(null);
+  const [addingForDay, setAddingForDay] = useState<Date | null>(null);
 
   const supabase = createClient();
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
@@ -376,7 +608,9 @@ export default function SchedulePage() {
       const startStr = format(weekStart, 'yyyy-MM-dd');
       const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-      const [entriesRes, employeesRes] = await Promise.all([
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const [entriesRes, employeesRes, shiftsRes, profileRes] = await Promise.all([
         supabase
           .from('schedule_entries')
           .select(`
@@ -391,6 +625,11 @@ export default function SchedulePage() {
           .from('profiles')
           .select('*')
           .order('full_name'),
+        supabase
+          .from('shift_definitions')
+          .select('*')
+          .order('start_time'),
+        user ? supabase.from('profiles').select('role').eq('id', user.id).single() : null,
       ]);
 
       if (entriesRes.data) {
@@ -398,6 +637,13 @@ export default function SchedulePage() {
       }
       if (employeesRes.data) {
         setEmployees(employeesRes.data as Profile[]);
+      }
+      if (shiftsRes.data) {
+        setShiftDefs(shiftsRes.data as ShiftDefinition[]);
+      }
+      if (profileRes?.data?.role === 'admin' && user) {
+        setIsAdmin(true);
+        setAdminId(user.id);
       }
     } catch (error) {
       console.error('Error fetching schedule:', error);
@@ -413,6 +659,29 @@ export default function SchedulePage() {
   const goToPrevWeek = () => setCurrentDate((d) => addDays(d, -7));
   const goToNextWeek = () => setCurrentDate((d) => addDays(d, 7));
   const goToToday = () => setCurrentDate(new Date());
+
+  const handleSaveEntry = async (id: string, data: { custom_start_time: string; custom_end_time: string; shift_definition_id: string | null }) => {
+    await supabase.from('schedule_entries').update({
+      shift_definition_id: data.shift_definition_id,
+      custom_start_time: data.shift_definition_id ? null : data.custom_start_time,
+      custom_end_time: data.shift_definition_id ? null : data.custom_end_time,
+    }).eq('id', id);
+    setEditingEntry(null);
+    fetchData();
+  };
+
+  const handleDeleteEntry = async (id: string) => {
+    await supabase.from('schedule_entries').delete().eq('id', id);
+    setEditingEntry(null);
+    fetchData();
+  };
+
+  const handleAddEntry = async (data: { user_id: string; date: string; shift_definition_id: string | null; custom_start_time: string | null; custom_end_time: string | null }) => {
+    if (!adminId) return;
+    await supabase.from('schedule_entries').insert([{ ...data, created_by: adminId }]);
+    setAddingForDay(null);
+    fetchData();
+  };
 
   const entriesByDay = useMemo(() => {
     return weekDays.map((day) =>
@@ -501,6 +770,8 @@ export default function SchedulePage() {
                 isToday={todayCheck(day)}
                 globalStartHour={globalBounds.startHour}
                 globalEndHour={globalBounds.endHour}
+                onEntryClick={isAdmin ? (entry) => setEditingEntry(entry) : undefined}
+                onAddClick={isAdmin ? () => setAddingForDay(day) : undefined}
               />
             ))}
           </div>
@@ -531,11 +802,33 @@ export default function SchedulePage() {
                   isToday={todayCheck(day)}
                   globalStartHour={globalBounds.startHour}
                   globalEndHour={globalBounds.endHour}
+                  onEntryClick={isAdmin ? (entry) => setEditingEntry(entry) : undefined}
+                  onAddClick={isAdmin ? () => setAddingForDay(day) : undefined}
                 />
               ))}
             </div>
           </div>
         </>
+      )}
+
+      {/* Admin modals */}
+      {editingEntry && (
+        <EditEntryModal
+          entry={editingEntry}
+          shiftDefs={shiftDefs}
+          onClose={() => setEditingEntry(null)}
+          onSave={handleSaveEntry}
+          onDelete={handleDeleteEntry}
+        />
+      )}
+      {addingForDay && (
+        <AddEntryModal
+          date={addingForDay}
+          employees={employees}
+          shiftDefs={shiftDefs}
+          onClose={() => setAddingForDay(null)}
+          onAdd={handleAddEntry}
+        />
       )}
     </div>
   );
