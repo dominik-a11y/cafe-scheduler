@@ -10,10 +10,14 @@ export async function GET(request: Request) {
 
   if (token_hash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash, type });
     if (!error) {
-      // If this is an invite, redirect to complete-profile page
-      if (type === 'invite') {
+      // If this is an invite, mark invitation as used and redirect to complete-profile
+      if (type === 'invite' && data.user?.email) {
+        await supabase
+          .from('invitations')
+          .update({ used: true })
+          .eq('email', data.user.email);
         return NextResponse.redirect(`${origin}/complete-profile`);
       }
       return NextResponse.redirect(`${origin}${next}`);
