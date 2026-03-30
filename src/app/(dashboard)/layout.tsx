@@ -66,7 +66,7 @@ export default function DashboardLayout({
   return (
     <div className="flex gap-4 p-4 lg:gap-6 lg:p-6 max-w-7xl mx-auto">
       <Sidebar />
-      <main className="flex-1 min-w-0">{children}</main>
+      <main className="flex-1 min-w-0 pt-10 lg:pt-0">{children}</main>
     </div>
   );
 }

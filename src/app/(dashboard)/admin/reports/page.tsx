@@ -47,7 +47,12 @@ function saveRates(rates: Record<string, number>) {
 async function loadFont(doc: any, url: string, fontName: string, style: string) {
   const res = await fetch(url);
   const buf = await res.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
   const fileName = `${fontName}-${style}.ttf`;
   doc.addFileToVFS(fileName, base64);
   doc.addFont(fileName, fontName, style);
