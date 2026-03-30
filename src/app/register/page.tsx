@@ -1,37 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Coffee, UserCheck, Loader2 } from 'lucide-react';
+import { Coffee, UserPlus, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
-export default function CompleteProfilePage() {
-  const [email, setEmail] = useState('');
+export default function RegisterPage() {
+  const [orgName, setOrgName] = useState('');
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      setEmail(user.email || '');
-      // If user already has a name set, they may have already completed this
-      if (user.user_metadata?.full_name) {
-        setFullName(user.user_metadata.full_name);
-      }
-      setPageLoading(false);
-    };
-    checkUser();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,58 +25,40 @@ export default function CompleteProfilePage() {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Hasło musi mieć minimum 6 znaków');
-      return;
-    }
-
-    if (!fullName.trim()) {
-      setError('Podaj imię i nazwisko');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Update password
-      const { error: pwError } = await supabase.auth.updateUser({
-        password,
-        data: { full_name: fullName.trim() },
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName, orgName }),
       });
 
-      if (pwError) {
-        setError(pwError.message);
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setError(data.error || 'Wystąpił błąd');
         setLoading(false);
         return;
       }
 
-      // Also update profiles table
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Profile + org_id should already exist from trigger; just update name
-        await supabase
-          .from('profiles')
-          .update({
-            full_name: fullName.trim(),
-          })
-          .eq('id', user.id);
+      // Sign in the newly created user
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInError) {
+        setError(signInError.message);
+        setLoading(false);
+        return;
       }
 
-      router.push('/schedule');
-    } catch (err: any) {
-      setError(err.message || 'Wystąpił błąd');
+      router.push('/admin');
+    } catch {
+      setError('Błąd połączenia z serwerem');
     } finally {
       setLoading(false);
     }
   };
-
-  if (pageLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 px-4">
@@ -102,18 +67,21 @@ export default function CompleteProfilePage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
             <Coffee className="w-8 h-8 text-amber-700" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Dokończ rejestrację</h1>
-          <p className="text-gray-500 mt-1">Uzupełnij swoje dane, aby korzystać z systemu</p>
+          <h1 className="text-2xl font-bold text-gray-900">Zarejestruj kawiarnię</h1>
+          <p className="text-gray-500 mt-1">Utwórz konto administratora i nową instancję</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Nazwa kawiarni</label>
             <input
-              type="email"
-              value={email}
-              disabled
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 cursor-not-allowed"
+              type="text"
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+              placeholder="np. Cafe Latte"
+              autoFocus
             />
           </div>
 
@@ -126,7 +94,18 @@ export default function CompleteProfilePage() {
               required
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
               placeholder="Jan Kowalski"
-              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition"
+              placeholder="email@example.com"
             />
           </div>
 
@@ -156,18 +135,23 @@ export default function CompleteProfilePage() {
             />
           </div>
 
-          {error && (
-            <div className="text-red-600 text-sm bg-red-50 rounded-xl px-4 py-3">{error}</div>
-          )}
+          {error && <div className="text-red-600 text-sm bg-red-50 rounded-xl px-4 py-3">{error}</div>}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-medium py-2.5 px-4 rounded-xl transition disabled:opacity-50"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserCheck className="w-5 h-5" />}
-            Zapisz i przejdź do harmonogramu
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
+            Zarejestruj się
           </button>
+
+          <div className="text-center text-sm text-gray-500">
+            Masz już konto?{' '}
+            <Link href="/login" className="text-amber-600 hover:text-amber-700 font-medium">
+              Zaloguj się
+            </Link>
+          </div>
         </form>
       </div>
     </div>

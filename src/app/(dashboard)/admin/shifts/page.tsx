@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Plus, Trash2 } from 'lucide-react';
 import { SHIFT_COLORS } from '@/lib/utils';
 import type { ShiftDefinition } from '@/lib/types';
+import { useOrg } from '@/lib/OrgContext';
 
 export default function ShiftsPage() {
   const [shifts, setShifts] = useState<ShiftDefinition[]>([]);
@@ -16,6 +17,7 @@ export default function ShiftsPage() {
   const [color, setColor] = useState(SHIFT_COLORS[0]);
   const [saving, setSaving] = useState(false);
   const supabase = createClient();
+  const { orgId } = useOrg();
 
   const fetchShifts = async () => {
     const { data } = await supabase.from('shift_definitions').select('*').order('start_time');
@@ -28,7 +30,7 @@ export default function ShiftsPage() {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await supabase.from('shift_definitions').insert([{ name, start_time: startTime, end_time: endTime, color }]);
+    await supabase.from('shift_definitions').insert([{ name, start_time: startTime, end_time: endTime, color, org_id: orgId }]);
     setName(''); setStartTime('08:00'); setEndTime('16:00'); setShowForm(false);
     setSaving(false);
     fetchShifts();

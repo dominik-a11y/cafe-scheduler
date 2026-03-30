@@ -1,10 +1,18 @@
 export type UserRole = 'admin' | 'employee';
 
+export interface Organization {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   email: string;
   full_name: string;
   role: UserRole;
+  org_id: string;
   created_at: string;
   updated_at: string;
 }

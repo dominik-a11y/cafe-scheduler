@@ -6,6 +6,7 @@ import { addDays, format, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, Trash2, ClipboardCheck, Pencil } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { ShiftDefinition } from '@/lib/types';
+import { useOrg } from '@/lib/OrgContext';
 
 interface AvailabilitySlot {
   id: string;
@@ -28,6 +29,7 @@ export default function AvailabilityPage() {
   const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
 
   const supabase = createClient();
+  const { orgId } = useOrg();
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -67,6 +69,7 @@ export default function AvailabilityPage() {
       start_time: '08:00',
       end_time: '16:00',
       shift_definition_id: null,
+      org_id: orgId,
     }]);
     setAddModeDay(null);
     fetchData();
@@ -81,6 +84,7 @@ export default function AvailabilityPage() {
       start_time: shift.start_time,
       end_time: shift.end_time,
       shift_definition_id: shift.id,
+      org_id: orgId,
     }]);
     setAddModeDay(null);
     fetchData();

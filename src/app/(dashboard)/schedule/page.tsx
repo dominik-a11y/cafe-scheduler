@@ -6,6 +6,7 @@ import { addDays, format, isSameDay } from 'date-fns';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus, Pencil, Trash2, X as XIcon } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile, ShiftDefinition, ScheduleEntry } from '@/lib/types';
+import { useOrg } from '@/lib/OrgContext';
 
 interface ScheduleEntryWithRelations extends ScheduleEntry {
   notes?: string | null;
@@ -592,13 +593,13 @@ export default function SchedulePage() {
   const [entries, setEntries] = useState<ScheduleEntryWithRelations[]>([]);
   const [employees, setEmployees] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [adminId, setAdminId] = useState<string | null>(null);
   const [shiftDefs, setShiftDefs] = useState<ShiftDefinition[]>([]);
   const [editingEntry, setEditingEntry] = useState<ScheduleEntryWithRelations | null>(null);
   const [addingForDay, setAddingForDay] = useState<Date | null>(null);
 
   const supabase = createClient();
+  const { orgId, userRole, userId: adminId } = useOrg();
+  const isAdmin = userRole === 'admin';
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -608,9 +609,7 @@ export default function SchedulePage() {
       const startStr = format(weekStart, 'yyyy-MM-dd');
       const endStr = format(weekEnd, 'yyyy-MM-dd');
 
-      const { data: { user } } = await supabase.auth.getUser();
-
-      const [entriesRes, employeesRes, shiftsRes, profileRes] = await Promise.all([
+      const [entriesRes, employeesRes, shiftsRes] = await Promise.all([
         supabase
           .from('schedule_entries')
           .select(`
@@ -629,7 +628,6 @@ export default function SchedulePage() {
           .from('shift_definitions')
           .select('*')
           .order('start_time'),
-        user ? supabase.from('profiles').select('role').eq('id', user.id).single() : null,
       ]);
 
       if (entriesRes.data) {
@@ -640,10 +638,6 @@ export default function SchedulePage() {
       }
       if (shiftsRes.data) {
         setShiftDefs(shiftsRes.data as ShiftDefinition[]);
-      }
-      if (profileRes?.data?.role === 'admin' && user) {
-        setIsAdmin(true);
-        setAdminId(user.id);
       }
     } catch (error) {
       console.error('Error fetching schedule:', error);
@@ -677,8 +671,7 @@ export default function SchedulePage() {
   };
 
   const handleAddEntry = async (data: { user_id: string; date: string; shift_definition_id: string | null; custom_start_time: string | null; custom_end_time: string | null }) => {
-    if (!adminId) return;
-    await supabase.from('schedule_entries').insert([{ ...data, created_by: adminId }]);
+    await supabase.from('schedule_entries').insert([{ ...data, created_by: adminId, org_id: orgId }]);
     setAddingForDay(null);
     fetchData();
   };

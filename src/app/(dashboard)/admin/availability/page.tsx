@@ -6,6 +6,7 @@ import { addDays, format } from 'date-fns';
 import { ChevronLeft, ChevronRight, Check, X, RefreshCw, Trash2 } from 'lucide-react';
 import { getWeekRange, DAY_NAMES_PL, formatDatePL } from '@/lib/utils';
 import type { Profile } from '@/lib/types';
+import { useOrg } from '@/lib/OrgContext';
 
 interface AvailabilityEntry {
   id: string;
@@ -19,11 +20,12 @@ interface AvailabilityEntry {
   profiles?: Pick<Profile, 'id' | 'full_name' | 'email'>;
 }
 
-function buildScheduleEntry(avail: AvailabilityEntry, createdBy: string): Record<string, unknown> {
+function buildScheduleEntry(avail: AvailabilityEntry, createdBy: string, orgId: string): Record<string, unknown> {
   const entry: Record<string, unknown> = {
     user_id: avail.user_id,
     date: avail.date,
     created_by: createdBy,
+    org_id: orgId,
   };
 
   if (avail.shift_definition_id) {
@@ -48,6 +50,7 @@ export default function AdminAvailabilityPage() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const supabase = createClient();
+  const { orgId } = useOrg();
   const { start: weekStart, end: weekEnd } = getWeekRange(currentDate);
 
   const fetchData = useCallback(async () => {
@@ -80,7 +83,7 @@ export default function AdminAvailabilityPage() {
       await supabase.from('availability').update({ status, reviewed_by: user.id }).eq('id', entry.id);
 
       if (status === 'approved') {
-        const scheduleEntry = buildScheduleEntry(entry, user.id);
+        const scheduleEntry = buildScheduleEntry(entry, user.id, orgId);
         await supabase.from('schedule_entries').insert([scheduleEntry]);
       }
 
@@ -146,7 +149,7 @@ export default function AdminAvailabilityPage() {
 
       if (approved && approved.length > 0) {
         const newEntries = approved.map((a: AvailabilityEntry) =>
-          buildScheduleEntry(a, user.id)
+          buildScheduleEntry(a, user.id, orgId)
         );
 
         const { error: insertError } = await supabase
