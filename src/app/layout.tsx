@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Café Scheduler',
-  description: 'Polish café shift scheduling application',
+  title: 'Grafik Gastro',
+  description: 'Aplikacja do zarządzania grafikiem zmian w gastronomii',
 };
 
 export default function RootLayout({

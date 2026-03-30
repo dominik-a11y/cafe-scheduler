@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Coffee, LogOut, Menu, X, CalendarDays, ClipboardCheck, Shield } from 'lucide-react';
+import { UtensilsCrossed, LogOut, Menu, X, CalendarDays, ClipboardCheck, Shield } from 'lucide-react';
 import type { Profile } from '@/lib/types';
 
 export default function Sidebar() {
@@ -64,8 +64,8 @@ export default function Sidebar() {
       >
         {/* Logo */}
         <div className="p-4 flex items-center gap-2">
-          <Coffee className="w-6 h-6 text-amber-600" />
-          <span className="font-semibold text-sm text-gray-900">Café Scheduler</span>
+          <UtensilsCrossed className="w-6 h-6 text-amber-600" />
+          <span className="font-semibold text-sm text-gray-900">Grafik Gastro</span>
         </div>
 
         {/* Navigation */}

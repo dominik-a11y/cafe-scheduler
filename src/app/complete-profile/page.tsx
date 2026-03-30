@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Coffee, UserCheck, Loader2 } from 'lucide-react';
+import { UtensilsCrossed, UserCheck, Loader2 } from 'lucide-react';
 
 export default function CompleteProfilePage() {
   const [email, setEmail] = useState('');
@@ -100,7 +100,7 @@ export default function CompleteProfilePage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
-            <Coffee className="w-8 h-8 text-amber-700" />
+            <UtensilsCrossed className="w-8 h-8 text-amber-700" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Dokończ rejestrację</h1>
           <p className="text-gray-500 mt-1">Uzupełnij swoje dane, aby korzystać z systemu</p>

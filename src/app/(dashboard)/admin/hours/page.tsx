@@ -46,7 +46,7 @@ export default function HoursPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-light">Godziny Otwarcia</h1>
-        <p className="text-sm text-gray-500 mt-1">Ustaw godziny otwarcia kawiarni dla każdego dnia tygodnia</p>
+        <p className="text-sm text-gray-500 mt-1">Ustaw godziny otwarcia lokalu dla każdego dnia tygodnia</p>
       </div>
 
       <div className="space-y-3">

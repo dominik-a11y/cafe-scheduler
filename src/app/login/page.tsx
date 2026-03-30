@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Coffee, LogIn, Loader2 } from 'lucide-react';
+import { UtensilsCrossed, LogIn, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -35,9 +35,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-100 rounded-2xl mb-4">
-            <Coffee className="w-8 h-8 text-amber-700" />
+            <UtensilsCrossed className="w-8 h-8 text-amber-700" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Grafik Kawiarni</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Grafik Gastro</h1>
           <p className="text-gray-500 mt-1">Zaloguj się do systemu</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 space-y-5">
@@ -74,7 +74,7 @@ export default function LoginPage() {
             Zaloguj się
           </button>
           <div className="text-center text-sm text-gray-500">
-            Chcesz zarejestrować nową kawiarnię?{' '}
+            Chcesz zarejestrować nowy lokal?{' '}
             <Link href="/register" className="text-amber-600 hover:text-amber-700 font-medium">
               Zarejestruj się
             </Link>
