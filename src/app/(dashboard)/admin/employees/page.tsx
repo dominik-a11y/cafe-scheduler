@@ -82,7 +82,7 @@ export default function EmployeesPage() {
       if (!res.ok || data.error) {
         showMessage('Błąd: ' + (data.error || `Status ${res.status}`), 'error');
       } else {
-        showMessage(data.message || 'Zaproszenie wysłane na ' + email);
+        showMessage(data.message || `Zaproszenie wysłane na ${email}. Pracownik musi sprawdzić skrzynkę mailową i kliknąć link aktywacyjny.`);
         setEmail('');
         setShowInvite(false);
         fetchData();
@@ -156,7 +156,7 @@ export default function EmployeesPage() {
               {sending ? 'Wysyłanie...' : 'Wyślij zaproszenie'}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">Pracownik otrzyma maila z linkiem do rejestracji.</p>
+          <p className="text-xs text-gray-400 mt-2">Pracownik otrzyma maila z linkiem aktywacyjnym. Po kliknięciu linku zostanie przekierowany do formularza rejestracji, gdzie ustawi hasło i imię.</p>
         </form>
       )}
 
