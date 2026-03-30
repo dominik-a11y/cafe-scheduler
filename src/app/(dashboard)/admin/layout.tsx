@@ -23,7 +23,7 @@ export default function AdminLayout({
   return (
     <div className="w-full">
       {/* Horizontal tab navigation */}
-      <nav className="flex gap-1 mb-6 overflow-x-auto pb-2 -mx-1 px-1">
+      <nav className="flex gap-1 mb-6 overflow-x-auto pb-2 -mx-1 px-1 pr-12 lg:pr-1">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = item.exact

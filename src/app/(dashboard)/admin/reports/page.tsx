@@ -29,8 +29,8 @@ interface EmployeeStats {
 }
 
 const MONTH_NAMES_PL = [
-  'Stycze\u0144', 'Luty', 'Marzec', 'Kwiecie\u0144', 'Maj', 'Czerwiec',
-  'Lipiec', 'Sierpie\u0144', 'Wrzesie\u0144', 'Pa\u017adziernik', 'Listopad', 'Grudzie\u0144',
+  'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+  'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
 ];
 
 function loadRates(): Record<string, number> {
@@ -42,6 +42,15 @@ function loadRates(): Record<string, number> {
 
 function saveRates(rates: Record<string, number>) {
   localStorage.setItem('cafe_hourly_rates', JSON.stringify(rates));
+}
+
+async function loadFont(doc: any, url: string, fontName: string, style: string) {
+  const res = await fetch(url);
+  const buf = await res.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const fileName = `${fontName}-${style}.ttf`;
+  doc.addFileToVFS(fileName, base64);
+  doc.addFont(fileName, fontName, style);
 }
 
 async function generatePdf(
@@ -57,13 +66,18 @@ async function generatePdf(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
 
+  await Promise.all([
+    loadFont(doc, '/fonts/Roboto-Regular.ttf', 'Roboto', 'normal'),
+    loadFont(doc, '/fonts/Roboto-Bold.ttf', 'Roboto', 'bold'),
+  ]);
+
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Roboto', 'bold');
   doc.text('Rejestr godzin realizacji zlecenia', pageWidth / 2, 20, { align: 'center' });
 
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Rozliczenie liczby godzin wykonywania uslug do umowy zlecenia nr ....................', 14, 32);
+  doc.setFont('Roboto', 'normal');
+  doc.text('Rozliczenie liczby godzin wykonywania usług do umowy zlecenia nr ....................', 14, 32);
   doc.text(`w ${MONTH_NAMES_PL[month].toLowerCase()} ${year}`, 14, 39);
   doc.text(`Zleceniobiorca: ${employeeName}`, 14, 46);
 
@@ -97,11 +111,11 @@ async function generatePdf(
   }
 
   const totalStr = totalHours % 1 === 0 ? String(totalHours) : totalHours.toFixed(1);
-  tableBody.push([{ content: 'Lacznie', styles: { fontStyle: 'bold' } } as any, { content: `${totalStr} h`, styles: { fontStyle: 'bold' } } as any, '', '']);
+  tableBody.push([{ content: 'Łącznie', styles: { fontStyle: 'bold' } } as any, { content: `${totalStr} h`, styles: { fontStyle: 'bold' } } as any, '', '']);
 
   (doc as any).autoTable({
     startY: 52,
-    head: [['Dzien\nmiesiaca', 'Liczba godzin\nrealizacji zlecenia', 'Podpis\nzleceniobiorcy', 'Podpis\nzleceniodawcy']],
+    head: [['Dzień\nmiesiąca', 'Liczba godzin\nrealizacji zlecenia', 'Podpis\nzleceniobiorcy', 'Podpis\nzleceniodawcy']],
     body: tableBody,
     theme: 'grid',
     headStyles: {
@@ -124,6 +138,7 @@ async function generatePdf(
       3: { cellWidth: 55 },
     },
     styles: {
+      font: 'Roboto',
       lineColor: [180, 180, 180],
       lineWidth: 0.3,
     },
@@ -298,7 +313,7 @@ export default function ReportsPage() {
   };
 
   const rangeLabel = viewMode === 'week'
-    ? `${formatDatePL(weekStart, 'd MMMM')} \u2013 ${formatDatePL(weekEnd, 'd MMMM yyyy')}`
+    ? `${formatDatePL(weekStart, 'd MMMM')} – ${formatDatePL(weekEnd, 'd MMMM yyyy')}`
     : `${MONTH_NAMES_PL[currentMonth]} ${currentYear}`;
 
   return (
@@ -310,17 +325,17 @@ export default function ReportsPage() {
             <BarChart3 className="w-7 h-7 text-amber-600" />
             Raporty
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Podsumowanie godzin pracy, wynagrodze&#324; i eksport PDF</p>
+          <p className="text-sm text-gray-500 mt-1">Podsumowanie godzin pracy, wynagrodzeń i eksport PDF</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
             <button onClick={() => setViewMode('week')}
               className={`px-3 py-1.5 transition ${viewMode === 'week' ? 'bg-amber-600 text-white' : 'bg-white hover:bg-gray-50'}`}>
-              Tydzie&#324;
+              Tydzień
             </button>
             <button onClick={() => setViewMode('month')}
               className={`px-3 py-1.5 transition ${viewMode === 'month' ? 'bg-amber-600 text-white' : 'bg-white hover:bg-gray-50'}`}>
-              Miesi&#261;c
+              Miesiąc
             </button>
           </div>
         </div>
@@ -331,7 +346,7 @@ export default function ReportsPage() {
         <button onClick={goPrev} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
           <ChevronLeft size={18} />
         </button>
-        <button onClick={goToday} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm">Dzi&#347;</button>
+        <button onClick={goToday} className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm">Dziś</button>
         <button onClick={goNext} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50">
           <ChevronRight size={18} />
         </button>
@@ -365,7 +380,7 @@ export default function ReportsPage() {
             <div className="rounded-lg border border-gray-200 p-4 bg-white">
               <div className="text-xs text-gray-500 mb-1 flex items-center gap-1"><DollarSign size={12} /> Wynagrodzenia</div>
               <div className="text-2xl font-semibold text-gray-900">
-                {totalSalaryAll > 0 ? `${totalSalaryAll.toFixed(2)} z\u0142` : '\u2014'}
+                {totalSalaryAll > 0 ? `${totalSalaryAll.toFixed(2)} zł` : '—'}
               </div>
             </div>
           </div>
@@ -373,7 +388,7 @@ export default function ReportsPage() {
           {/* Shift type breakdown */}
           {Object.keys(shiftTotals).length > 0 && (
             <div className="mb-6">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Podzia\u0142 wg typu zmiany</h2>
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Podział wg typu zmiany</h2>
               <div className="flex flex-wrap gap-3">
                 {Object.entries(shiftTotals).map(([name, data]) => (
                   <div key={name} className="rounded-lg border border-gray-200 px-4 py-3 bg-white flex items-center gap-3">
@@ -432,12 +447,12 @@ export default function ReportsPage() {
                       placeholder="0"
                       className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-1 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
                     />
-                    <span className="text-xs text-gray-400">z\u0142</span>
+                    <span className="text-xs text-gray-400">zł</span>
                   </div>
 
                   {salary > 0 && (
                     <div className="text-sm font-semibold text-green-700 bg-green-50 rounded-lg px-3 py-1.5 text-center">
-                      Wynagrodzenie: {salary.toFixed(2)} z\u0142
+                      Wynagrodzenie: {salary.toFixed(2)} zł
                     </div>
                   )}
 
@@ -465,7 +480,7 @@ export default function ReportsPage() {
               </div>
               {totalSalaryAll > 0 && (
                 <div className="text-sm font-semibold text-green-700 mt-2">
-                  Wynagrodzenia: {totalSalaryAll.toFixed(2)} z\u0142
+                  Wynagrodzenia: {totalSalaryAll.toFixed(2)} zł
                 </div>
               )}
             </div>
@@ -481,7 +496,7 @@ export default function ReportsPage() {
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200">Godziny</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 w-24">Stawka/h</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200">Wynagrodzenie</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 hidden lg:table-cell">Rozk\u0142ad zmian</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 hidden lg:table-cell">Rozkład zmian</th>
                   <th className="text-center text-xs font-semibold text-gray-600 p-3 border-b border-gray-200 w-12">PDF</th>
                 </tr>
               </thead>
@@ -514,7 +529,7 @@ export default function ReportsPage() {
                       </td>
                       <td className="p-3 border-b border-gray-100 text-center">
                         <span className={`text-sm font-semibold ${salary > 0 ? 'text-green-700' : 'text-gray-300'}`}>
-                          {salary > 0 ? `${salary.toFixed(2)} z\u0142` : '\u2014'}
+                          {salary > 0 ? `${salary.toFixed(2)} zł` : '—'}
                         </span>
                       </td>
                       <td className="p-3 border-b border-gray-100 hidden lg:table-cell">
@@ -549,7 +564,7 @@ export default function ReportsPage() {
                   <td className="p-3 text-center text-sm text-gray-700">{totalHoursAll.toFixed(1)} h</td>
                   <td className="p-3"></td>
                   <td className="p-3 text-center text-sm text-green-700">
-                    {totalSalaryAll > 0 ? `${totalSalaryAll.toFixed(2)} z\u0142` : '\u2014'}
+                    {totalSalaryAll > 0 ? `${totalSalaryAll.toFixed(2)} zł` : '—'}
                   </td>
                   <td className="p-3 hidden lg:table-cell"></td>
                   <td className="p-3"></td>
