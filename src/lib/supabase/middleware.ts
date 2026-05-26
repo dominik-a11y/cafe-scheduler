@@ -3,7 +3,15 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ['/login', '/register', '/auth/confirm', '/complete-profile'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/auth/confirm',
+  '/auth/callback',
+  '/complete-profile',
+  '/forgot-password',
+  '/reset-password',
+];
 
 export async function updateSession(request: NextRequest) {
   const response = NextResponse.next({
