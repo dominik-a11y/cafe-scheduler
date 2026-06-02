@@ -20,6 +20,11 @@ export const DAY_NAMES_PL = [
   'Niedziela',
 ];
 
+export const MONTH_NAMES_PL = [
+  'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+  'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
+];
+
 export function getWeekRange(date: Date) {
   const start = startOfWeek(date, { weekStartsOn: 1 });
   const end = endOfWeek(date, { weekStartsOn: 1 });

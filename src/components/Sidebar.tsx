@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { UtensilsCrossed, LogOut, Menu, X, CalendarDays, ClipboardCheck, Shield } from 'lucide-react';
+import { UtensilsCrossed, LogOut, Menu, X, CalendarDays, ClipboardCheck, Shield, BarChart3 } from 'lucide-react';
 import type { Profile } from '@/lib/types';
 
 export default function Sidebar() {
@@ -42,6 +42,7 @@ export default function Sidebar() {
   const navLinks = [
     { href: '/schedule', label: 'Harmonogram', icon: CalendarDays },
     { href: '/availability', label: 'Dyspozycyjność', icon: ClipboardCheck },
+    { href: '/statystyki', label: 'Statystyki', icon: BarChart3 },
   ];
 
   return (
